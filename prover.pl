@@ -7,11 +7,11 @@ add(N, suc(M), suc(Y)) :- add(N, M, Y).
 dec(0, 0).
 dec(suc(N), N).
 
-% TODO: how do we compose? U := dec (sub N M)
+% TODO: how do we compose better? U := dec (sub N M)
 sub(N, 0, N).
 sub(N, suc(M), U) :- sub(N, M, Y), dec(Y, U).
 
-% TODO: how to do `map snd` in prolog
+% TODO: generelize `map snd` in prolog
 base([], []).
 base([pair(_, NNF)|T], [NNF|CT]) :- base(T, CT).
 
@@ -22,7 +22,6 @@ dash(A, suc(N), [N|A]).
 dump([], []).
 dump([H|T], A) :- dump(T, S), dash(S, H, A).
 
-% TODO: learn to trace debug
 free(pre(_, _, V), V).
 free(con(P, Q), V) :- free(P, F1), free(Q, F2), append(F1, F2, V).
 free(dis(P, Q), V) :- free(P, F1), free(Q, F2), append(F1, F2, V).
@@ -32,6 +31,8 @@ free(exi(P), V) :- free(P, F), dump(F, V).
 over(S, _, 0, S).
 over(_, H, suc(_), H).
 
+% General convertion approach
+% ===========================
 % 1. Capitalize every argument
 % 2. Replace `constants` like `ZeroNat`.
 % 3. make `more x1 x2 = Y` into
@@ -60,27 +61,47 @@ frees([H|T], Y) :- free([H|frees(T)], Y).
 stop(C, _, [], C).
 stop(C, P, [H|T], Y) :- P = H -> Y = [] ; stop(C, P, T, Y).
 
-% not?
+negate(0, 1).
+negate(1, 0).
+
+% [pair(0, P)], fst, snd, out
 track(S, _, pre(B, I, V), Y) :-
   append(S, [pair(0, pre(B, I, V))], SS),
-  base(S, B),
-  stop([SS], pre(not(B), I, V), B, Y).
-% append case
+  base(S, BASE),
+  % Negating boolean is a built-in function in functional programming. 
+  % Replace with user defined `negate`. 
+  negate(B, NB),
+  stop([SS], pre(NB, I, V), BASE, Y).
 track(S, _, con(P, Q), [SP, SQ]) :- 
   append(S, [pair(0, P)], SP),
   append(S, [pair(0, Q)], SQ).
-track(S, _, dis(P, Q), [SP, SQ]) :- 
-  append(S, [pair(0, P)], SP),
-  append(S, [pair(0, Q)], SQ).
-track(S, _, uni(P), Y) :- 
+track(S, _, dis(P, Q), [SS]) :-
+  append(S, [pair(0, P), pair(0, Q)], SS).
+track(S, _, uni(P), [Y]) :- 
   base(S, B),
   frees([uni(P)|B], F),
   fresh(F, FF),
   subst(0, FF, P, SFF),
-  append(S, [(0, SFF)], Y).
-track(S, N, exi(P), Y) :- 
+  append(S, [pair(0, SFF)], Y).
+track(S, N, exi(P), [Y]) :- 
   subst(0, N, P, SP),
-  append(S, [(0, SP), (suc(N), exi(P))], Y).
+  append(S, [pair(0, SP), pair(suc(N), exi(P))], Y).
+
+solve([], [[]]).
+solve([pair(F, S)|T], Y) :- track(T, F, S, Y).
+
+% call solve() on every element and append results together.
+% TODO: Generalize foldr
+solves([], []).
+solves([H|T], Y) :- solve(H, HS), solves(T, TS), append(HS, TS, Y).
+
+% As long as non-empty input keep calling solves().
+% TODO: usings prologs yes/no or built in?
+prover([], 1).
+prover([H|T], Y) :- solves([H|T], S), prover(S, Y).
+% S is output of track. runs solves->track again on output.
+
+check(P, Y) :- prover([[pair(0, P)]], Y).
 
 :- begin_tests(cases).
 test(add) :- add(suc(suc(0)), suc(suc(suc(0))), suc(suc(suc(suc(suc(0)))))).
@@ -93,8 +114,41 @@ test(free) :-
   free(A,[suc(0), suc(0)]).
 % over, mend, more, subst
 test(fresh) :- fresh([suc(0), suc(suc(0)), 0], suc(suc(suc(0)))).
-% frees
+% frees, stop, track, solve, solves, prover
+test(track_dis) :-
+  T = dis(pre(0, 0, [0]), pre(1, 0, [0])), 
+  track([], 0, T, Y),
+  Y = [[
+    pair(0, pre(0, 0, [0])), 
+    pair(0, pre(1, 0, [0]))
+  ]].
+  % track(Y, 0, dis(pre(0, 0, [0]), pre(1, 0, [0])), YY),
+  % YY = [
+  %   pair(0, pre(0, 0, [0])), 
+  %   pair(0, pre(1, 0, [0]))
+  % ].
+test(check_simple) :-
+  T = dis(
+    pre(0, 0, [0]),
+    pre(1, 0, [0])
+  ),
+  check(T, 1).
+test(check) :-
+  T =
+    dis(
+      uni(con(
+        pre(0, 0, [0]),
+        pre(0, suc(0), [0])
+      )),
+      dis(
+        exi(pre(1, suc(0), [0])),
+        exi(pre(1, 0, [0]))
+      )
+    ),
+  check(T, 1).
 :- end_tests(cases).
 
+% :-trace(track).
+% :- trace.
 % :-debug.
 :- run_tests.

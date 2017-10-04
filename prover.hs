@@ -18,8 +18,7 @@ instance Eq Nat where {
   a == b = equalNat a b;
 };
 
--- How to do datastructures?
-data Nnf = Pre Bool Nat [Nat] | Con Nnf Nnf | Dis Nnf Nnf | Uni Nnf | Exi Nnf;
+data Nnf = Pre Bool Nat [Nat] | Con Nnf Nnf | Dis Nnf Nnf | Uni Nnf | Exi Nnf deriving Prelude.Show;
 
 
 add :: Nat -> Nat -> Nat;
@@ -137,7 +136,7 @@ main' ::
   (([[(Nat, Nnf)]] -> Bool) ->
     ([[(Nat, Nnf)]] -> [[(Nat, Nnf)]]) -> [[(Nat, Nnf)]] -> Bool) ->
     Nnf -> Bool;
-    main' a p = a nulla solves [[(ZeroNat, p)]];
+main' a p = a nulla solves [[(ZeroNat, p)]];
 
 test :: Nnf;
 test =
@@ -152,3 +151,8 @@ iterator g f c = if g c then True else iterator g f (f c);
 check :: Nnf -> Bool;
 check = main' iterator;
 
+-- let p = Dis (Pre True ZeroNat [ZeroNat]) (Pre False ZeroNat [ZeroNat])
+-- track ([(ZeroNat, p)]) ZeroNat p
+
+
+-- let pp = [(ZeroNat,Pre False ZeroNat [ZeroNat])], Pre True ZeroNat [ZeroNat] => []
