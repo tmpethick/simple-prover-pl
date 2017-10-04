@@ -1,24 +1,19 @@
 
-
-
 add(N, 0, N).
 add(N, suc(M), suc(Y)) :- add(N, M, Y).
 
 dec(0, 0).
 dec(suc(N), N).
 
-% TODO: how do we compose better? U := dec (sub N M)
 sub(N, 0, N).
 sub(N, suc(M), U) :- sub(N, M, Y), dec(Y, U).
 
-% TODO: generelize `map snd` in prolog
 base([], []).
 base([pair(_, NNF)|T], [NNF|CT]) :- base(T, CT).
 
 dash(A, 0, A).
 dash(A, suc(N), [N|A]).
 
-% IDEA: Generalization: nested call e.g. `dash(dump t) h` => sequence of ANDs.
 dump([], []).
 dump([H|T], A) :- dump(T, S), dash(S, H, A).
 
@@ -31,20 +26,11 @@ free(exi(P), V) :- free(P, F), dump(F, V).
 over(S, _, 0, S).
 over(_, H, suc(_), H).
 
-% General convertion approach
-% ===========================
-% 1. Capitalize every argument
-% 2. Replace `constants` like `ZeroNat`.
-% 3. make `more x1 x2 = Y` into
-%  | input is output    -> more(a1, a2, Y).
-%  | input is func call -> more(a1, a2, Y) :- func(..., Y).
-% 4. If func call then string together nested calls with `,`(AND).
-% 5. Replace unused variables with `_`.
 more(X, S, H, 0, Y) :- sub(X, H, XS), over(S, H, XS, Y).
 more(_, _, H, suc(_), Y) :- dec(H, Y).
 
 mend(_, _, [], []).
-mend(X, S, [H|T], Y) :- sub(H, X, XS), mend(X, S, T, M), more(X, S, H, [XS|M], Y).
+mend(X, S, [H|T], [MO|ME]) :- sub(H, X, XS), more(X, S, H, XS, MO), mend(X, S, T, ME).
 
 subst(X, S, pre(B, I, V), pre(B, I, W)) :-  mend(X, S, V, W).
 subst(X, S, con(P, Q), con(PP, QQ)) :- subst(X, S, P, PP), subst(X, S, Q, QQ).
@@ -56,7 +42,7 @@ fresh([], 0).
 fresh([H|T], suc(Y)) :- fresh(T, A), dec(A, B), sub(B, H, C), add(C, H, Y).
 
 frees([], []).
-frees([H|T], Y) :- free([H|frees(T)], Y).
+frees([H|T], Y) :-  free(H, F), frees(T, FF), append(F, FF, Y).
 
 stop(C, _, [], C).
 stop(C, P, [H|T], Y) :- P = H -> Y = [] ; stop(C, P, T, Y).
@@ -64,12 +50,9 @@ stop(C, P, [H|T], Y) :- P = H -> Y = [] ; stop(C, P, T, Y).
 negate(0, 1).
 negate(1, 0).
 
-% [pair(0, P)], fst, snd, out
 track(S, _, pre(B, I, V), Y) :-
   append(S, [pair(0, pre(B, I, V))], SS),
   base(S, BASE),
-  % Negating boolean is a built-in function in functional programming. 
-  % Replace with user defined `negate`. 
   negate(B, NB),
   stop([SS], pre(NB, I, V), BASE, Y).
 track(S, _, con(P, Q), [SP, SQ]) :- 
@@ -90,16 +73,11 @@ track(S, N, exi(P), [Y]) :-
 solve([], [[]]).
 solve([pair(F, S)|T], Y) :- track(T, F, S, Y).
 
-% call solve() on every element and append results together.
-% TODO: Generalize foldr
 solves([], []).
 solves([H|T], Y) :- solve(H, HS), solves(T, TS), append(HS, TS, Y).
 
-% As long as non-empty input keep calling solves().
-% TODO: usings prologs yes/no or built in?
 prover([], 1).
 prover([H|T], Y) :- solves([H|T], S), prover(S, Y).
-% S is output of track. runs solves->track again on output.
 
 check(P, Y) :- prover([[pair(0, P)]], Y).
 
@@ -112,9 +90,9 @@ test(dump) :- dump([0, suc(suc(0)), suc(0)], [suc(0), 0]).
 test(free) :- 
   A = con(pre(1, 0, [suc(0)]), pre(1, 0, [suc(0)])),
   free(A,[suc(0), suc(0)]).
-% over, mend, more, subst
 test(fresh) :- fresh([suc(0), suc(suc(0)), 0], suc(suc(suc(0)))).
-% frees, stop, track, solve, solves, prover
+% TODO: test
+% over, mend, more, subst, frees, stop, track, solve, solves, prover
 test(track_dis) :-
   T = dis(pre(0, 0, [0]), pre(1, 0, [0])), 
   track([], 0, T, Y),
@@ -122,11 +100,6 @@ test(track_dis) :-
     pair(0, pre(0, 0, [0])), 
     pair(0, pre(1, 0, [0]))
   ]].
-  % track(Y, 0, dis(pre(0, 0, [0]), pre(1, 0, [0])), YY),
-  % YY = [
-  %   pair(0, pre(0, 0, [0])), 
-  %   pair(0, pre(1, 0, [0]))
-  % ].
 test(check_simple) :-
   T = dis(
     pre(0, 0, [0]),
@@ -149,6 +122,6 @@ test(check) :-
 :- end_tests(cases).
 
 % :-trace(track).
-% :- trace.
+% :-trace.
 % :-debug.
 :- run_tests.
