@@ -63,14 +63,14 @@ data Term =
     | ConstTerm TConst
     | VarTerm TVar
     | ListTerm [Term]
+    | TupleTerm [Term]
   deriving (Eq, Show)
   
 data TVar = TId String | Wildcard deriving (Eq, Show)
 
 data TConst = TTrue | TFalse | TString String | TInteger Int deriving (Eq, Show)
 
--- Tuple implemented with comma (it is an infix operator)
-data TBinOp = TFunc | TEquiv | TTuple | TAddHead | TConj deriving (Eq, Show)
+data TBinOp = TFunc | TEquiv | TAddHead | TConj deriving (Eq, Show)
 
 data TTerOp = TIf deriving (Eq, Show)
 
@@ -83,7 +83,7 @@ langDef = Token.LanguageDef
   , Token.identStart      = letter
   , Token.identLetter     = alphaNum <|> oneOf "_'"
   , Token.opStart         = Token.opLetter langDef
-  , Token.opLetter        = oneOf ",:!#$%&*+./<=>?@\\^|-~"
+  , Token.opLetter        = oneOf ",:!#$%&*+./<=>?@\\^|-~[]()"
   , Token.reservedNames   = ["True", "False", "if", "then", "else"]
   , Token.reservedOpNames = ["⋀" , ".", "≡", "#", "@"]
   , Token.caseSensitive   = True
@@ -97,38 +97,43 @@ TokenParser { parens = m_parens
   , whiteSpace = m_whiteSpace } = makeTokenParser langDef
 
 xp :: ParsecT String () Identity Term
-xp = buildExpressionParser table term <?> "expression"
-
-inList :: Stream s m Char => ParsecT s u m [Term] -> ParsecT s u m Term
-inList p = ListTerm <$> between (char '[') (char ']') p
+xp = m_whiteSpace >> buildExpressionParser table term <?> "expression"
 
 sepByComma :: Stream s m Char => ParsecT s u m Term -> ParsecT s u m [Term]
 sepByComma p = p `sepBy` char ','
 
+inTuple :: Stream s m Char => ParsecT s u m [Term] -> ParsecT s u m Term
+inTuple p = TupleTerm <$> between (char '(') (char ')') p
+
+inList :: Stream s m Char => ParsecT s u m [Term] -> ParsecT s u m Term
+inList p = ListTerm <$> between (char '[') (char ']') p
+
 list :: Stream s m Char => ParsecT s u m Term -> ParsecT s u m Term
 list = inList . sepByComma
 
+tuple :: Stream s m Char => ParsecT s u m Term -> ParsecT s u m Term
+tuple = inTuple . sepByComma
+
 -- atoms
-term = m_parens xp
-        -- TODO: test "Truuu"
-        <|> (VarTerm . TId) <$> m_identifier
-        <|> list xp
-        <|> pIf xp
-        -- TODO: replace with `$> ?`
-        <|> (m_reserved "True" >> return (ConstTerm TTrue))
-        <|> (m_reserved "False" >> return (ConstTerm TFalse))
+term = tuple xp
+  <|> list xp
+  <|> m_parens xp
+  <|> (VarTerm . TId) <$> m_identifier
+  <|> pIf xp
+  -- TODO: test "Truuu"
+  -- TODO: replace with `$> ?`
+  <|> (m_reserved "True" >> return (ConstTerm TTrue))
+  <|> (m_reserved "False" >> return (ConstTerm TFalse))
 
 table = [ 
   -- how to do if (ternary)? https://groups.google.com/forum/#!topic/comp.lang.functional/7E2ydJLqCqs
   [Infix pFuncApp Expr.AssocLeft],
   [Infix pAdd Expr.AssocLeft],
-  [Infix pTuple Expr.AssocLeft],
   [Infix pEquiv Expr.AssocLeft]
   ]
 
 pFuncApp = m_whiteSpace >> return (TermBinOp TFunc)
 pAdd = m_reservedOp "#" >> return (TermBinOp TAddHead)
-pTuple = m_reservedOp "," >> return (TermBinOp TTuple)
 pEquiv = m_reservedOp "≡" >> return (TermBinOp TEquiv)
 -- TODO: rewrite or keep for readability?
 pIf xp' = do 
@@ -141,5 +146,3 @@ pIf xp' = do
   return (TermTerOp TIf b p q)
 
 -- prover (h # t) ≡ prover (solves (h # t))
-
--- TODO: use applicative
