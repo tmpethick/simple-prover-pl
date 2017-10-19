@@ -36,8 +36,8 @@ prettyPrintPrec p (TermBinOp TConcat t1 t2) = addParen (p > 2) $
 prettyPrintPrec p (TermBinOp TConj t1 t2) = addParen (p > 1) $
   prettyPrintPrec 1 t1 <+> text "⋀" <+> prettyPrintPrec 2 t2
 prettyPrintPrec p (TermBinOp TEquiv t1 t2) = addParen (p > 0) $
-  prettyPrintPrec 0 t1 <+> text "≡" <+> prettyPrintPrec 1 t2
-             
+  prettyPrintPrec 0 t1 <+> text "\\<equiv>" <+> prettyPrintPrec 1 t2
+
 prettyTVar :: TVar -> Doc
 prettyTVar (TId id) = text id
 prettyTVar Wildcard = text "_"
@@ -48,4 +48,6 @@ prettyTConst TFalse = text "False"
 prettyTConst (TString s) = text s 
 prettyTConst (TInteger i) = integer i
 
-prettyPrint = prettyPrintPrec 0
+-- Hack: Explicit state width of 1000 to avoid newlines.
+-- Default would otherwise be `show $ prettyPrintPrec 0 term`.
+prettyPrint term = (displayS . renderPretty 1 1000 . prettyPrintPrec 0) term ""

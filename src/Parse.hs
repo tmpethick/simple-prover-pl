@@ -55,6 +55,8 @@ parse' rule = parse rule "(source)"
 -- add tuple ,
 -- 
 -- how to deal with append when this is overwriten?
+-- eq
+-- quantifiers
 
 data Term = 
   ConstTerm TConst
@@ -91,7 +93,7 @@ langDef = Token.LanguageDef
   , Token.opStart         = Token.opLetter langDef
   , Token.opLetter        = oneOf ",:!#$%&*+./<=>?@\\^|-~"
   , Token.reservedNames   = ["True", "False"]
-  , Token.reservedOpNames = ["⋀" , ".", "≡", "#", "@", "if", "then", "else"]
+  , Token.reservedOpNames = ["\\<equiv>", "#", "@", "if", "then", "else"]
   , Token.caseSensitive   = True
   }
 
@@ -154,11 +156,11 @@ table = [
     [Infix pEquiv Expr.AssocLeft]
     ]
     
-  -- Function application is just whitespace.. 
+-- Function application is just whitespace.. 
 pFuncApp = return (TermBinOp TFunc)
 pAdd = m_reservedOp "#" >> return (TermBinOp TAddHead)
 pConcat = m_reservedOp "@" >> return (TermBinOp TConcat)
-pEquiv = m_reservedOp "≡" >> return (TermBinOp TEquiv)
+pEquiv = m_reservedOp "\\<equiv>" >> return (TermBinOp TEquiv)
 -- TODO: rewrite or keep for readability?
 pIf expr = do 
   m_reserved "if"
