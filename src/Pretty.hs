@@ -13,20 +13,31 @@ merge :: [a] -> [a] -> [a]
 merge xs     []     = xs
 merge []     ys     = ys
 merge (x:xs) (y:ys) = x : y : merge xs ys
-  
-prettyPrint :: Term -> Doc
-prettyPrint (TermBinOp TFunc t1 t2) = prettyPrint t1 <+> prettyPrint t2
-prettyPrint (TermBinOp TEquiv t1 t2) = prettyPrint t1 <+> text "≡" <+> prettyPrint t2
-prettyPrint (TermBinOp TConcat t1 t2) = prettyPrint t1 <+> text "@" <+> prettyPrint t2
-prettyPrint (TermBinOp TAddHead t1 t2) = prettyPrint t1 <+> text "#" <+> prettyPrint t2
-prettyPrint (TermBinOp TConj t1 t2) = prettyPrint t1 <+> text "⋀" <+> prettyPrint t2
-prettyPrint (TermTerOp TIf t1 t2 t3) = hsep $ merge (map prettyPrint [t1, t2, t3]) 
-                                                    (map text ["if", "then", "else"])
-prettyPrint (ConstTerm cst) = prettyTConst cst
-prettyPrint (VarTerm var) = prettyTVar var
-prettyPrint (ListTerm ts) = list $ map prettyPrint ts
-prettyPrint (TupleTerm ts) = tupled $ map prettyPrint ts
 
+addParen b p = if b then parens p else p
+
+type Precedence = Int
+
+-- TODO: generalize precedence and associativity rules.
+prettyPrintPrec :: Precedence -> Term -> Doc 
+prettyPrintPrec _ (ConstTerm cst) = prettyTConst cst
+prettyPrintPrec _ (VarTerm var)   = prettyTVar var
+prettyPrintPrec p (ListTerm ts)   = list   $ map (prettyPrintPrec p) ts
+prettyPrintPrec p (TupleTerm ts)  = tupled $ map (prettyPrintPrec p) ts
+prettyPrintPrec p (TermTerOp TIf t1 t2 t3) = addParen (p > 5) $
+  hsep $ merge (zipWith prettyPrintPrec [5, 6, 6] [t1, t2, t3]) 
+               (map text ["if", "then", "else"])
+prettyPrintPrec p (TermBinOp TFunc t1 t2) = addParen (p > 4) $
+  prettyPrintPrec 4 t1 <+> prettyPrintPrec 5 t2
+prettyPrintPrec p (TermBinOp TAddHead t1 t2) = addParen (p > 3) $
+  prettyPrintPrec 3 t1 <+> text "#" <+> prettyPrintPrec 4 t2
+prettyPrintPrec p (TermBinOp TConcat t1 t2) = addParen (p > 2) $
+  prettyPrintPrec 2 t1 <+> text "@" <+> prettyPrintPrec 3 t2
+prettyPrintPrec p (TermBinOp TConj t1 t2) = addParen (p > 1) $
+  prettyPrintPrec 1 t1 <+> text "⋀" <+> prettyPrintPrec 2 t2
+prettyPrintPrec p (TermBinOp TEquiv t1 t2) = addParen (p > 0) $
+  prettyPrintPrec 0 t1 <+> text "≡" <+> prettyPrintPrec 1 t2
+             
 prettyTVar :: TVar -> Doc
 prettyTVar (TId id) = text id
 prettyTVar Wildcard = text "_"
@@ -36,3 +47,5 @@ prettyTConst TTrue = text "True"
 prettyTConst TFalse = text "False"
 prettyTConst (TString s) = text s 
 prettyTConst (TInteger i) = integer i
+
+prettyPrint = prettyPrintPrec 0

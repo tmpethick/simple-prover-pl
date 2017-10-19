@@ -57,20 +57,26 @@ parse' rule = parse rule "(source)"
 -- how to deal with append when this is overwriten?
 
 data Term = 
-    -- | TermUnOp TBinOp Term
-      TermBinOp TBinOp Term Term
-    | TermTerOp TTerOp Term Term Term
-    | ConstTerm TConst
-    | VarTerm TVar
-    | ListTerm [Term]
-    | TupleTerm [Term]
+  ConstTerm TConst
+  | VarTerm TVar
+  | TupleTerm [Term]
+  | ListTerm [Term]
+  -- | TermUnOp TBinOp Term
+  | TermBinOp TBinOp Term Term
+  | TermTerOp TTerOp Term Term Term
   deriving (Eq, Show)
   
 data TVar = TId String | Wildcard deriving (Eq, Show)
 
 data TConst = TTrue | TFalse | TString String | TInteger Integer deriving (Eq, Show)
 
-data TBinOp = TFunc | TEquiv | TAddHead | TConcat | TConj deriving (Eq, Show)
+data TBinOp = 
+    TFunc 
+    | TAddHead 
+    | TConcat 
+    | TConj 
+    | TEquiv 
+  deriving (Eq, Show)
 
 data TTerOp = TIf deriving (Eq, Show)
 
