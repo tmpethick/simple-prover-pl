@@ -4,7 +4,7 @@ module Parse where
 import Text.Parsec
 import Text.Parsec.Token as Token
 import Text.Parsec.Expr as Expr
-import Control.Applicative hiding ((<|>))
+import Control.Applicative hiding ((<|>), many)
 import Data.Functor.Identity (Identity)
 
 parse' rule = parse rule "(source)"
@@ -68,9 +68,9 @@ data Term =
   
 data TVar = TId String | Wildcard deriving (Eq, Show)
 
-data TConst = TTrue | TFalse | TString String | TInteger Int deriving (Eq, Show)
+data TConst = TTrue | TFalse | TString String | TInteger Integer deriving (Eq, Show)
 
-data TBinOp = TFunc | TEquiv | TAddHead | TConj deriving (Eq, Show)
+data TBinOp = TFunc | TEquiv | TAddHead | TConcat | TConj deriving (Eq, Show)
 
 data TTerOp = TIf deriving (Eq, Show)
 
@@ -83,9 +83,9 @@ langDef = Token.LanguageDef
   , Token.identStart      = letter
   , Token.identLetter     = alphaNum <|> oneOf "_'"
   , Token.opStart         = Token.opLetter langDef
-  , Token.opLetter        = oneOf ",:!#$%&*+./<=>?@\\^|-~[]()"
-  , Token.reservedNames   = ["True", "False", "if", "then", "else"]
-  , Token.reservedOpNames = ["⋀" , ".", "≡", "#", "@"]
+  , Token.opLetter        = oneOf ",:!#$%&*+./<=>?@\\^|-~"
+  , Token.reservedNames   = ["True", "False"]
+  , Token.reservedOpNames = ["⋀" , ".", "≡", "#", "@", "if", "then", "else"]
   , Token.caseSensitive   = True
   }
 
@@ -93,56 +93,74 @@ TokenParser { parens = m_parens
   , identifier = m_identifier
   , reservedOp = m_reservedOp
   , reserved = m_reserved
-  , semiSep1 = m_semiSep1
+  , symbol = m_symbol
+  , natural = m_natural
   , whiteSpace = m_whiteSpace } = makeTokenParser langDef
 
-xp :: ParsecT String () Identity Term
-xp = m_whiteSpace >> buildExpressionParser table term <?> "expression"
+type StringParser = ParsecT String () Identity
 
-sepByComma :: Stream s m Char => ParsecT s u m Term -> ParsecT s u m [Term]
-sepByComma p = p `sepBy` char ','
+sepByComma :: StringParser Term -> StringParser [Term]
+sepByComma p = p `sepBy` m_symbol ","
 
-inTuple :: Stream s m Char => ParsecT s u m [Term] -> ParsecT s u m Term
-inTuple p = TupleTerm <$> between (char '(') (char ')') p
+sepByComma2 :: StringParser Term -> StringParser [Term]
+sepByComma2 p = do
+  x1 <- p
+  m_symbol ","
+  x2 <- p
+  xs <- many (m_symbol "," >> p)
+  return (x1:x2:xs)
 
-inList :: Stream s m Char => ParsecT s u m [Term] -> ParsecT s u m Term
-inList p = ListTerm <$> between (char '[') (char ']') p
+inTuple :: StringParser [Term] -> StringParser Term
+inTuple p = TupleTerm <$> between (m_symbol "(") (m_symbol ")") p
 
-list :: Stream s m Char => ParsecT s u m Term -> ParsecT s u m Term
-list = inList . sepByComma
+inList :: StringParser [Term] -> StringParser Term
+inList p = ListTerm <$> between (m_symbol "[") (m_symbol "]") p
 
-tuple :: Stream s m Char => ParsecT s u m Term -> ParsecT s u m Term
-tuple = inTuple . sepByComma
+list :: StringParser Term -> StringParser Term
+list p = (inList . sepByComma) p <?> "list"
+
+tuple :: StringParser Term -> StringParser Term
+tuple p = (inTuple . sepByComma2) p <?> "tuple"
+
+xp :: StringParser Term
+xp = buildExpressionParser table term <?> "expression"
+-- TODO: move whiteSpace to mainParser
+-- mainParser = m_whiteSpace >> xp
 
 -- atoms
-term = tuple xp
+-- Use `try` since `m_parens` and `tuple` shares the same starting char.
+-- TODO: using `try` might not be desirable.. (research why)
+term = try (m_parens xp)
+  <|> tuple xp 
   <|> list xp
-  <|> m_parens xp
-  <|> (VarTerm . TId) <$> m_identifier
-  <|> pIf xp
   -- TODO: test "Truuu"
   -- TODO: replace with `$> ?`
   <|> (m_reserved "True" >> return (ConstTerm TTrue))
   <|> (m_reserved "False" >> return (ConstTerm TFalse))
+  <|> (ConstTerm . TInteger) <$> m_natural
+  <|> (VarTerm . TId) <$> m_identifier
+  <|> pIf xp
 
 table = [ 
-  -- how to do if (ternary)? https://groups.google.com/forum/#!topic/comp.lang.functional/7E2ydJLqCqs
-  [Infix pFuncApp Expr.AssocLeft],
-  [Infix pAdd Expr.AssocLeft],
-  [Infix pEquiv Expr.AssocLeft]
-  ]
-
-pFuncApp = m_whiteSpace >> return (TermBinOp TFunc)
+    [Infix pFuncApp Expr.AssocLeft],
+    [Infix pConcat Expr.AssocLeft],
+    [Infix pAdd Expr.AssocLeft],
+    [Infix pEquiv Expr.AssocLeft]
+    ]
+    
+  -- Function application is just whitespace.. 
+pFuncApp = return (TermBinOp TFunc)
 pAdd = m_reservedOp "#" >> return (TermBinOp TAddHead)
+pConcat = m_reservedOp "@" >> return (TermBinOp TConcat)
 pEquiv = m_reservedOp "≡" >> return (TermBinOp TEquiv)
 -- TODO: rewrite or keep for readability?
-pIf xp' = do 
+pIf expr = do 
   m_reserved "if"
-  b <- xp'
+  b <- expr
   m_reserved "then"
-  p <- xp'
+  p <- expr
   m_reserved "else"
-  q <- xp'
+  q <- expr
   return (TermTerOp TIf b p q)
 
--- prover (h # t) ≡ prover (solves (h # t))
+parser = m_whiteSpace >> xp <* eof

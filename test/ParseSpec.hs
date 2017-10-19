@@ -4,7 +4,7 @@ import Test.Hspec
 import Test.QuickCheck
 import Text.Parsec (digit)
 import Parse (
-  parse', xp, list, 
+  parse', parser, list, 
   Term(TupleTerm, ConstTerm, ListTerm),
   TConst(TTrue))
 
@@ -25,23 +25,26 @@ spec =
         t `shouldBe` ListTerm [ConstTerm TTrue, ConstTerm TTrue]
     context "full parser" $ do
       it "parses whitespace" $ do
-        let Right t = parse' xp " True "
+        let Right t = parse' parser " True "
         t `shouldBe` ConstTerm TTrue
       it "parses inner whitespace" $ do
-        let Right t = parse' xp "[ True ]"
+        let Right t = parse' parser "[ True ]"
         t `shouldBe` ListTerm [ConstTerm TTrue]
+      it "parses parents" $ do
+        let Right t = parse' parser "(True)"
+        t `shouldBe` ConstTerm TTrue
       it "parses tuple" $ do
-        let Right t = parse' xp "(True,True)"
+        let Right t = parse' parser "(True,True)"
         t `shouldBe` TupleTerm [
           ConstTerm TTrue,
           ConstTerm TTrue]
       it "parses tuple of lists" $ do
-        let Right t = parse' xp "(True,[True,True])"
+        let Right t = parse' parser "(True,[True,True])"
         t `shouldBe` TupleTerm [
           ConstTerm TTrue,
           ListTerm [ConstTerm TTrue, ConstTerm TTrue]]
       it "parses list of tuple" $ do
-        let Right t = parse' xp "[True,(True,True)]"
+        let Right t = parse' parser "[True,(True,True)]"
         t `shouldBe` ListTerm [
           ConstTerm TTrue,  
           TupleTerm [ConstTerm TTrue, ConstTerm TTrue]]

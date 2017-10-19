@@ -16,8 +16,10 @@ cabal-version:       >=1.10
 library
   hs-source-dirs:      src
   exposed-modules:     Parse
+                     , Pretty
   build-depends:       base >= 4.7 && < 5
                      , parsec >= 3.1
+                     , wl-pprint
   default-language:    Haskell2010
 
 executable simple-prover-pl-exe
@@ -35,7 +37,9 @@ test-suite simple-prover-pl-test
   build-depends:       base
                      , simple-prover-pl
                      , parsec >= 3.1
+                     , wl-pprint
                      , hspec
+                     , hspec-attoparsec
                      , QuickCheck
   ghc-options:         -threaded -rtsopts -with-rtsopts=-N
   default-language:    Haskell2010
