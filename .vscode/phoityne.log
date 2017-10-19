@@ -1,0 +1,14 @@
+2017-10-17 23:06:31 [ThreadId 11] ERROR phoityne - H>>= :force _result
+ can not use these commands.
+[":{",":abandon",":back",":break",":continue",":delete",":force",":forward",":history",":list",":print",":sprint",":step",":steplocal",":stepmodule",":trace"]
+
+2017-10-17 23:06:45 [ThreadId 11] ERROR phoityne - H>>= :force
+ can not use these commands.
+[":{",":abandon",":back",":break",":continue",":delete",":force",":forward",":history",":list",":print",":sprint",":step",":steplocal",":stepmodule",":trace"]
+
+2017-10-17 23:08:39 [ThreadId 11] ERROR phoityne - "\"extractSourcePosition\" (line 2, column 6):\nunexpected end of input\nexpecting \"Stopped at \" or \"Stopped in \" [INPUT]*** Exception: Pattern match failure in do expression at ghc/GHCi/UI.hs:2947:12-18\nH>>= "
+2017-10-17 23:10:04 [ThreadId 11] ERROR phoityne - "error: lexical error in string/character literal at end of input"
+2017-10-19 09:18:30 [ThreadId 11] ERROR phoityne - H>>= :print _result
+ can not use these commands.
+[":{",":abandon",":back",":break",":continue",":delete",":force",":forward",":history",":list",":print",":sprint",":step",":steplocal",":stepmodule",":trace"]
+
