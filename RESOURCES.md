@@ -1,6 +1,22 @@
 
 
-
+- Adding meta data to AST: 
+  http://blog.ezyang.com/2013/05/the-ast-typing-problem/
+  https://brianmckenna.org/blog/type_annotation_cofree 
+- Comonads
+  http://dlaing.org/cofun/posts/free_and_cofree.html
+  https://5outh.blogspot.dk/2013/01/comonads.html
+- AST with polymophism
+  https://stackoverflow.com/questions/33679522/choose-an-ast-representation-in-haskell
+- Fix-point/cofree on reddit
+  https://www.reddit.com/r/haskell/comments/4x22f9/labelling_ast_nodes_with_locations/
+- Fix -> Cofree for annotation on compilaiton
+  https://stackoverflow.com/questions/38462563/how-to-work-with-ast-with-cofree-annotation 
+- Recursive schemes (fix-point and polymorphic) !!!!!
+  http://blog.sumtypeofway.com/an-introduction-to-recursion-schemes/
+  http://blog.sumtypeofway.com/recursion-schemes-part-2/
+  http://blog.sumtypeofway.com/recursion-schemes-part-iii-folds-in-context/ 
+  http://blog.sumtypeofway.com/recursion-schemes-part-iv-time-is-of-the-essence/ 
 
 - SQL in Parsec https://jakewheat.github.io/intro_to_parsing/#pretty-printing
 
@@ -20,3 +36,4 @@ Literature:
 - Compilers http://parsingintro.sourceforge.net/
 - Using transformations instead https://stackoverflow.com/questions/28711580/how-to-write-a-source-to-source-compiler-api
 - source-to-source compilation https://en.wikipedia.org/wiki/Source-to-source_compiler
+

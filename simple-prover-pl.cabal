@@ -19,6 +19,7 @@ library
                      , Pretty
                      , PrettyProlog
   build-depends:       base >= 4.7 && < 5
+                     , data-fix >= 0.2
                      , parsec >= 3.1
                      , text >= 1.2
                      , wl-pprint

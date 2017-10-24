@@ -1,6 +1,7 @@
-{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE FlexibleContexts, DeriveFunctor, DeriveFoldable, DeriveTraversable #-}
 module Parse where
 
+import Data.Fix
 import Text.Parsec
 import Text.Parsec.Token as Token
 import Text.Parsec.Expr as Expr
@@ -58,16 +59,16 @@ parse' rule = parse rule "(source)"
 -- eq
 -- quantifiers
 
-data Term = 
+data TermF a = 
   ConstTerm TConst
   | VarTerm TVar
-  | TupleTerm [Term]
-  | ListTerm [Term]
-  -- | TermUnOp TBinOp Term
-  | TermBinOp TBinOp Term Term
-  | TermTerOp TTerOp Term Term Term
-  deriving (Eq, Show)
-  
+  | TupleTerm [a]
+  | ListTerm [a]
+  -- | TermUnOp TBinOp a
+  | TermBinOp TBinOp a a
+  | TermTerOp TTerOp a a a
+  deriving (Show, Eq, Functor, Foldable, Traversable)
+
 data TVar = TId String | Wildcard deriving (Eq, Show)
 
 data TConst = TTrue | TFalse | TString String | TInteger Integer deriving (Eq, Show)
@@ -81,6 +82,26 @@ data TBinOp =
   deriving (Eq, Show)
 
 data TTerOp = TIf deriving (Eq, Show)
+
+type Term = Fix TermF
+
+constTerm :: TConst -> Term
+constTerm = Fix . ConstTerm
+
+varTerm :: TVar -> Term
+varTerm = Fix . VarTerm
+
+tupleTerm :: [Term] -> Term
+tupleTerm = Fix . TupleTerm
+
+listTerm :: [Term] -> Term
+listTerm = Fix . ListTerm
+
+termBinOp :: TBinOp -> Term -> Term -> Term
+termBinOp o a b = Fix $ TermBinOp o a b
+
+termTerOp :: TTerOp -> Term -> Term -> Term -> Term
+termTerOp o a b c = Fix $ TermTerOp o a b c
 
 langDef :: Token.LanguageDef ()
 langDef = Token.LanguageDef
@@ -119,10 +140,10 @@ sepByComma2 p = do
   return (x1:x2:xs)
 
 inTuple :: StringParser [Term] -> StringParser Term
-inTuple p = TupleTerm <$> between (m_symbol "(") (m_symbol ")") p
+inTuple p = tupleTerm <$> between (m_symbol "(") (m_symbol ")") p
 
 inList :: StringParser [Term] -> StringParser Term
-inList p = ListTerm <$> between (m_symbol "[") (m_symbol "]") p
+inList p = listTerm <$> between (m_symbol "[") (m_symbol "]") p
 
 list :: StringParser Term -> StringParser Term
 list p = (inList . sepByComma) p <?> "list"
@@ -143,10 +164,10 @@ term = try (m_parens xp)
   <|> list xp
   -- TODO: test "Truuu"
   -- TODO: replace with `$> ?`
-  <|> (m_reserved "True" >> return (ConstTerm TTrue))
-  <|> (m_reserved "False" >> return (ConstTerm TFalse))
-  <|> (ConstTerm . TInteger) <$> m_natural
-  <|> (VarTerm . TId) <$> m_identifier
+  <|> (m_reserved "True" >> return (constTerm TTrue))
+  <|> (m_reserved "False" >> return (constTerm TFalse))
+  <|> (constTerm . TInteger) <$> m_natural
+  <|> (varTerm . TId) <$> m_identifier
   <|> pIf xp
 
 table = [ 
@@ -157,10 +178,10 @@ table = [
     ]
     
 -- Function application is just whitespace.. 
-pFuncApp = return (TermBinOp TFunc)
-pAdd = m_reservedOp "#" >> return (TermBinOp TAddHead)
-pConcat = m_reservedOp "@" >> return (TermBinOp TConcat)
-pEquiv = m_reservedOp "\\<equiv>" >> return (TermBinOp TEquiv)
+pFuncApp = return (termBinOp TFunc)
+pAdd = m_reservedOp "#" >> return (termBinOp TAddHead)
+pConcat = m_reservedOp "@" >> return (termBinOp TConcat)
+pEquiv = m_reservedOp "\\<equiv>" >> return (termBinOp TEquiv)
 -- TODO: rewrite or keep for readability?
 pIf expr = do 
   m_reserved "if"
@@ -169,6 +190,6 @@ pIf expr = do
   p <- expr
   m_reserved "else"
   q <- expr
-  return (TermTerOp TIf b p q)
+  return (termTerOp TIf b p q)
 
 parser = m_whiteSpace >> xp <* eof

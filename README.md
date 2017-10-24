@@ -25,8 +25,15 @@ Further ideas
 Parser
 ------
 
-- Unsound: It parses invalid Isabelle. (is [b \equiv p] valid?)
+- Unsound: It parses invalid Isabelle. (is `[b \<equiv> p]` valid?)
 - In-complete: It cannot parse all valid Isabelle. (left out a lot of operators)
 - Structure and Printing: Precedence rules are not exactly right (if-else statements have higher precedence than some binary operators for which it should not)
 - It parses more Isabelle than the prolog parser can handle.
 - The prolog parser expect a structure with one top level equation an only one function application on the left side with only atoms e.g. `f a (b # c) \equiv ...`.
+- Added structure by introducing data types (capitalized functions like `Pre`). This is requires since these will be predicates in prolog with no "output".
+
+TODO
+----
+
+- Quantifiers
+- Multiple terms/statements
