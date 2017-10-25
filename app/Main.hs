@@ -1,6 +1,6 @@
 module Main where
 
-import Parse (parse', xp)
+import Parse (parse', parser)
 
 main :: IO ()
-main = print $ parse' xp "prover (h # t) ≡ prover (solves (h # t))"
+main = print "a"-- parse' parser "prover (h # t) ≡ prover (solves (h # t))"

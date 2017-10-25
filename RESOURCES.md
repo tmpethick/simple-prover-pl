@@ -1,4 +1,7 @@
 
+- QuickCheck Testing for DSL
+  https://deque.blog/2017/02/14/quickcheck-in-action/
+
 
 - Adding meta data to AST: 
   http://blog.ezyang.com/2013/05/the-ast-typing-problem/
@@ -32,8 +35,12 @@ BNF/CFG for functional languages
 - BNF for Haskell https://www.haskell.org/onlinereport/syntax-iso.html
 
 Literature:
+- Necessary to use para instead of cata to add parenthesis/precedence.
+- https://web.engr.oregonstate.edu/~erwig/papers/CategoricalADT_AMAST98.pdf
+- Algebra of Programming (Oxford) http://www.cs.ox.ac.uk/publications/books/algebra/
+- Constructive Catamorphism for syntax transformation!!!!! http://www.davidchristiansen.dk/pubs/banana-algebra-journal-version.pdf
+http://www.itu.dk/people/brabrand/banana-algebra/banana-algebra.pdf
 - Monadic combinator parsers http://www.itu.dk/people/carsten/courses/f02/handouts/MonadicParserCombinators.pdf
 - Compilers http://parsingintro.sourceforge.net/
 - Using transformations instead https://stackoverflow.com/questions/28711580/how-to-write-a-source-to-source-compiler-api
 - source-to-source compilation https://en.wikipedia.org/wiki/Source-to-source_compiler
-

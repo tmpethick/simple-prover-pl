@@ -20,26 +20,32 @@ addParen b p = if b then parens p else p
 
 type Precedence = Int
 
+precedence :: TermF a -> Precedence
+precedence (ConstTerm cst) = 1000
+precedence (VarTerm var)   = 1000
+precedence (ListTerm ts)   = 1000
+precedence (TupleTerm ts)  = 1000
+precedence (TermTerOp TIf _ _ _) = 900
+precedence (TermBinOp TFunc _ _) = 800
+precedence (TermBinOp TAddHead _ _) = 700
+precedence (TermBinOp TConcat _ _) = 600
+precedence (TermBinOp TConj _ _) = 500
+precedence (TermBinOp TEquiv _ _) = 400
+
 -- TODO: generalize precedence and associativity rules.
-prettyPrintPrec :: Precedence -> Term -> Doc 
-prettyPrintPrec p t = prettyPrintPrec' (unfix t) where
-  prettyPrintPrec' (ConstTerm cst) = prettyTConst cst
-  prettyPrintPrec' (VarTerm var)   = prettyTVar var
-  prettyPrintPrec' (ListTerm ts)   = list   $ map (prettyPrintPrec p) ts
-  prettyPrintPrec' (TupleTerm ts)  = tupled $ map (prettyPrintPrec p) ts
-  prettyPrintPrec' (TermTerOp TIf t1 t2 t3) = addParen (p > 5) $
-    hsep $ merge (zipWith prettyPrintPrec [5, 6, 6] [t1, t2, t3]) 
-                (map text ["if", "then", "else"])
-  prettyPrintPrec' (TermBinOp TFunc t1 t2) = addParen (p > 4) $
-    prettyPrintPrec 4 t1 <+> prettyPrintPrec 5 t2
-  prettyPrintPrec' (TermBinOp TAddHead t1 t2) = addParen (p > 3) $
-    prettyPrintPrec 3 t1 <+> text "#" <+> prettyPrintPrec 4 t2
-  prettyPrintPrec' (TermBinOp TConcat t1 t2) = addParen (p > 2) $
-    prettyPrintPrec 2 t1 <+> text "@" <+> prettyPrintPrec 3 t2
-  prettyPrintPrec' (TermBinOp TConj t1 t2) = addParen (p > 1) $
-    prettyPrintPrec 1 t1 <+> text "⋀" <+> prettyPrintPrec 2 t2
-  prettyPrintPrec' (TermBinOp TEquiv t1 t2) = addParen (p > 0) $
-    prettyPrintPrec 0 t1 <+> text "\\<equiv>" <+> prettyPrintPrec 1 t2
+prettyPrintPrec :: Term -> Doc 
+prettyPrintPrec = cata alg where
+  alg (ConstTerm cst) = prettyTConst cst
+  alg (VarTerm var)   = prettyTVar var
+  alg (ListTerm ts)   = list ts
+  alg (TupleTerm ts)  = tupled ts
+  alg (TermTerOp TIf t1 t2 t3) = 
+    hsep $ merge [t1, t2, t3] (map text ["if", "then", "else"])
+  alg (TermBinOp TFunc t1 t2) = t1 <+> t2
+  alg (TermBinOp TAddHead t1 t2) = t1 <+> text "#" <+> t2
+  alg (TermBinOp TConcat t1 t2) = t1 <+> text "@" <+> t2
+  alg (TermBinOp TConj t1 t2) = t1 <+> text "⋀" <+> t2
+  alg (TermBinOp TEquiv t1 t2) = t1 <+> text "\\<equiv>" <+> t2
 
 prettyTVar :: TVar -> Doc
 prettyTVar (TId id) = text id
@@ -53,4 +59,4 @@ prettyTConst (TInteger i) = integer i
 
 -- Hack: Explicit state width of 1000 to avoid newlines.
 -- Default would otherwise be `show $ prettyPrintPrec 0 term`.
-prettyPrint term = (displayS . renderPretty 1 1000 . prettyPrintPrec 0) term ""
+prettyPrint term = (displayS . renderPretty 1 1000 . prettyPrintPrec) term ""

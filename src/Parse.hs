@@ -1,8 +1,10 @@
-{-# LANGUAGE FlexibleContexts, DeriveFunctor, DeriveFoldable, DeriveTraversable #-}
+{-# LANGUAGE TemplateHaskell, FlexibleContexts, DeriveFunctor, DeriveFoldable, DeriveTraversable #-}
 module Parse where
 
 import Data.Functor.Foldable
 import Text.Parsec
+import Data.Eq.Deriving (deriveEq1)
+import Text.Show.Deriving (deriveShow1)
 import Text.Parsec.Token as Token
 import Text.Parsec.Expr as Expr
 import Control.Applicative hiding ((<|>), many)
@@ -59,16 +61,6 @@ parse' rule = parse rule "(source)"
 -- eq
 -- quantifiers
 
-data TermF a = 
-  ConstTerm TConst
-  | VarTerm TVar
-  | TupleTerm [a]
-  | ListTerm [a]
-  -- | TermUnOp TBinOp a
-  | TermBinOp TBinOp a a
-  | TermTerOp TTerOp a a a
-  deriving (Show, Eq, Functor, Foldable, Traversable)
-
 data TVar = TId String | Wildcard deriving (Eq, Show)
 
 data TConst = TTrue | TFalse | TString String | TInteger Integer deriving (Eq, Show)
@@ -82,6 +74,19 @@ data TBinOp =
   deriving (Eq, Show)
 
 data TTerOp = TIf deriving (Eq, Show)
+
+data TermF a = 
+  ConstTerm TConst
+  | VarTerm TVar
+  | TupleTerm [a]
+  | ListTerm [a]
+  -- | TermUnOp TBinOp a
+  | TermBinOp TBinOp a a
+  | TermTerOp TTerOp a a a
+  deriving (Show, Eq, Functor, Foldable, Traversable)
+
+deriveShow1 ''TermF
+deriveEq1 ''TermF
 
 type Term = Fix TermF
 
