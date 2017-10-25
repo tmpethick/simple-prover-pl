@@ -1,4 +1,6 @@
 
+- Recursive Overview!  
+  https://stackoverflow.com/questions/6941904/recursion-schemes-for-dummies
 - QuickCheck Testing for DSL
   https://deque.blog/2017/02/14/quickcheck-in-action/
 

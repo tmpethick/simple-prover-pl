@@ -32,20 +32,28 @@ precedence (TermBinOp TConcat _ _) = 600
 precedence (TermBinOp TConj _ _) = 500
 precedence (TermBinOp TEquiv _ _) = 400
 
+withParen :: TermF a1 -> Precedence -> (Term, Doc) -> Doc
+withParen p a (t, d) = addParen (precedence (unfix t) < precedence p + a) d
+
 -- TODO: generalize precedence and associativity rules.
 prettyPrintPrec :: Term -> Doc 
-prettyPrintPrec = cata alg where
-  alg (ConstTerm cst) = prettyTConst cst
-  alg (VarTerm var)   = prettyTVar var
-  alg (ListTerm ts)   = list ts
-  alg (TupleTerm ts)  = tupled ts
-  alg (TermTerOp TIf t1 t2 t3) = 
-    hsep $ merge [t1, t2, t3] (map text ["if", "then", "else"])
-  alg (TermBinOp TFunc t1 t2) = t1 <+> t2
-  alg (TermBinOp TAddHead t1 t2) = t1 <+> text "#" <+> t2
-  alg (TermBinOp TConcat t1 t2) = t1 <+> text "@" <+> t2
-  alg (TermBinOp TConj t1 t2) = t1 <+> text "⋀" <+> t2
-  alg (TermBinOp TEquiv t1 t2) = t1 <+> text "\\<equiv>" <+> t2
+prettyPrintPrec = para alg where
+  alg t = alg' t where
+    withParen' = withParen t
+    withParen0 = withParen' 0
+    alg' (ConstTerm cst) = prettyTConst cst
+    alg' (VarTerm var)   = prettyTVar var
+    alg' (ListTerm ts)   = list $ fmap snd ts
+    alg' (TupleTerm ts)  = tupled $ fmap snd ts
+    alg' (TermTerOp TIf t1 t2 t3) = 
+      hsep $ merge (zipWith withParen' [0, 0, 1] [t1, t2, t3]) 
+                    (map text ["if", "then", "else"])
+    alg' (TermBinOp TFunc t1 t2) =  withParen0 t1 <+> withParen' 1 t2
+    alg' (TermBinOp op t1 t2)    = withParen0 t1 <+> sep op <+> withParen' 1 t2 where 
+      sep TAddHead = text "#"
+      sep TConcat = text "@"
+      sep TConj = text "⋀"
+      sep TEquiv = text "\\<equiv>"
 
 prettyTVar :: TVar -> Doc
 prettyTVar (TId id) = text id
