@@ -1,9 +1,12 @@
+{-# LANGUAGE FlexibleContexts, DeriveFunctor #-}
 module PrettyProlog where
 
 import Data.Char
 import Text.PrettyPrint.Leijen
+import Control.Comonad.Cofree
+import Control.Monad.Free
+import Data.Functor.Foldable
 
-import Data.Fix
 import Parse (
   parser,
   parse',
@@ -45,16 +48,49 @@ type Precedence = Int
 -- cata:    Nat -> Int
 -- ana:     Int -> Nat
 -- hylo:    ana then cata (e.g. mergeSort)
--- prepro:  
+-- prepro:  natural transformation (used to filter) then cata
+-- postpro: ana then natural transformation
+
+data ASTF a = Name String
+            | FuncApp a a
+            deriving (Show, Eq, Functor)
+
+type AST = Fix ASTF
+
+name = Fix . Name
+funcApp a b = Fix $ FuncApp a b
+
+ast :: AST
+ast = funcApp (funcApp (name "f") (name "a")) (name "b")
+
+functional :: AST -> Doc
+functional = cata alg where
+  alg (Name s) = text s
+  alg (FuncApp a b) = a <+> b
+
+type AnnAST = Cofree ASTF (Maybe String)
+
+addAnn :: AST -> AnnAST
+addAnn = cata alg where
+  alg e@(FuncApp a b) = Just "1" :< e
+  alg e = Nothing :< e
+
+-- testHisto = histo alg where
+--   alg e@(FuncApp a b) = a
+--   alg e = "e"
+  
+-- histo..
+-- assumed flipped
+-- FuncApp a b = a <> parens b
 
 prettyTVar :: TVar -> Doc
 prettyTVar (TId id) = text $ fmap toUpper id
 prettyTVar Wildcard = text "_"
 
 prettyTConst :: TConst -> Doc
-prettyTConst TTrue = text "True"
-prettyTConst TFalse = text "False"
-prettyTConst (TString s) = text s 
+prettyTConst TTrue = text "1"
+prettyTConst TFalse = text "0"
+prettyTConst (TString s) = text s
 prettyTConst (TInteger i) = integer i
 
 -- prettyPrint = ppClausePrec 0

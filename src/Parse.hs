@@ -1,7 +1,7 @@
 {-# LANGUAGE FlexibleContexts, DeriveFunctor, DeriveFoldable, DeriveTraversable #-}
 module Parse where
 
-import Data.Fix
+import Data.Functor.Foldable
 import Text.Parsec
 import Text.Parsec.Token as Token
 import Text.Parsec.Expr as Expr

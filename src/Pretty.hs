@@ -1,8 +1,8 @@
 module Pretty where
 
 import Text.PrettyPrint.Leijen
+import Data.Functor.Foldable
 
-import Data.Fix
 import Parse (
   Term,
   TermF(TermBinOp, TermTerOp, TupleTerm, ConstTerm, ListTerm, VarTerm),
@@ -22,7 +22,7 @@ type Precedence = Int
 
 -- TODO: generalize precedence and associativity rules.
 prettyPrintPrec :: Precedence -> Term -> Doc 
-prettyPrintPrec p t = prettyPrintPrec' (unFix t) where
+prettyPrintPrec p t = prettyPrintPrec' (unfix t) where
   prettyPrintPrec' (ConstTerm cst) = prettyTConst cst
   prettyPrintPrec' (VarTerm var)   = prettyTVar var
   prettyPrintPrec' (ListTerm ts)   = list   $ map (prettyPrintPrec p) ts
