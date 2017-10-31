@@ -80,7 +80,6 @@ data TermF a =
   | VarTerm TVar
   | TupleTerm [a]
   | ListTerm [a]
-  -- | TermUnOp TBinOp a
   | TermBinOp TBinOp a a
   | TermTerOp TTerOp a a a
   deriving (Show, Eq, Functor, Foldable, Traversable)

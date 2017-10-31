@@ -1,7 +1,11 @@
-{-# LANGUAGE FlexibleContexts, DeriveFunctor #-}
+{-# LANGUAGE TemplateHaskell, FlexibleContexts, DeriveFunctor, DeriveFoldable, DeriveTraversable #-}
 module PrettyProlog where
 
+import Data.Eq.Deriving (deriveEq1)
+import Text.Show.Deriving (deriveShow1)
+import Data.Functor.Identity (Identity)  
 import Data.Char
+import Control.Arrow ((>>>))
 import Text.PrettyPrint.Leijen
 import Control.Comonad.Cofree
 import Control.Monad.Free
@@ -17,80 +21,140 @@ import Parse (
   TBinOp(TFunc, TEquiv, TAddHead, TConcat, TConj),
   TTerOp(TIf))
 
-merge :: [a] -> [a] -> [a]
-merge xs     []     = xs
-merge []     ys     = ys
-merge (x:xs) (y:ys) = x : y : merge xs ys
+----------------------------------
+-- Types
+----------------------------------
 
-addParen b p = if b then parens p else p
+data PVar = PId String | PWildcard deriving (Eq, Show)
 
-type Precedence = Int
+data PConst = PTrue | PFalse | PString String | PInteger Integer deriving (Eq, Show)
 
--- ppClausePrec p (TermBinOp TEquiv t1 t2) = ppHeadPrec p Nothing t1 
---                         <+> text ":-" <+> ppBodyPrec p 0 t2
+data PBinOp = PAddHead | PImpl deriving (Eq, Show)
 
--- Function calls
--- ppBodyPrec p outputIdx term = text ""
+data PTerOp = PIf deriving (Eq, Show)
 
--- ppHeadPrec :: Integer -> Maybe Doc -> Term -> Doc
--- ppHeadPrec p parent t = ppHeadPrec' parent (unFix t) where
---   ppHeadPrec' Nothing (TermBinOp TFunc (_ -> VarTerm (TId fid)) t2) = text fid <> parens (ppHeadPrec p Nothing (unFix t2))
---   ppHeadPrec' (Just parent) (TermBinOp TFunc (VarTerm (TId fid)) t2) = text fid <> parens args
---     where args = ppHeadPrec p Nothing t2 <> comma <> parent
---   ppHeadPrec' Nothing (TermBinOp TFunc t1 t2) = ppHeadPrec p (Just rhs) t1
---     where rhs = ppHeadPrec p Nothing t2
---   ppHeadPrec' (Just parent) (TermBinOp TFunc t1 t2) = ppHeadPrec p (Just rhs) t1
---     where rhs = ppHeadPrec p Nothing t2 <> comma <> parent
---   ppHeadPrec' parent (VarTerm tv) = prettyTVar tv
+data PTermF a = 
+  ConstPTerm PConst
+  | VarPTerm PVar
+  | TuplePTerm [a]
+  | ListPTerm [a]
+  | PTermBinOp PBinOp a a
+  | PTermTerOp PTerOp a a a
+  | PAnd [a]
+  | PFuncApp PVar [a]
+  | PPredicate PVar [a]
+  deriving (Show, Eq, Functor, Foldable, Traversable)
 
--- ppHeadPrec :: Term -> Doc
+deriveShow1 ''PTermF
+deriveEq1 ''PTermF
 
--- cata:    Nat -> Int
--- ana:     Int -> Nat
--- hylo:    ana then cata (e.g. mergeSort)
--- prepro:  natural transformation (used to filter) then cata
--- postpro: ana then natural transformation
+type PTerm = Fix PTermF
 
-data ASTF a = Name String
-            | FuncApp a a
-            deriving (Show, Eq, Functor)
+----------------------------------
+-- To Prolog AST
+----------------------------------
 
-type AST = Fix ASTF
-
-name = Fix . Name
-funcApp a b = Fix $ FuncApp a b
-
-ast :: AST
-ast = funcApp (funcApp (name "f") (name "a")) (name "b")
-
-functional :: AST -> Doc
-functional = cata alg where
-  alg (Name s) = text s
-  alg (FuncApp a b) = a <+> b
-
-type AnnAST = Cofree ASTF (Maybe String)
-
-addAnn :: AST -> AnnAST
-addAnn = cata alg where
-  alg e@(FuncApp a b) = Just "1" :< e
-  alg e = Nothing :< e
-
--- testHisto = histo alg where
---   alg e@(FuncApp a b) = a
---   alg e = "e"
+toPrologAST :: Term -> PTerm
+toPrologAST = cata (Fix . alg) where
+  -- Convert nested one arg function applications
+  alg (TermBinOp TFunc a b) = case unfix a of 
+    (VarPTerm f) -> PFuncApp f [b]
+    (PFuncApp f b') -> PFuncApp f (b' ++ [b])
   
--- histo..
--- assumed flipped
--- FuncApp a b = a <> parens b
+  -- Concat is just a function call
+  alg (TermBinOp TConcat a b) = PFuncApp (PId "append") [a, b]
 
-prettyTVar :: TVar -> Doc
-prettyTVar (TId id) = text $ fmap toUpper id
-prettyTVar Wildcard = text "_"
+  -- 1-to-1 translations
+  alg (ConstTerm c) = ConstPTerm (convertConst c)
+  alg (VarTerm v) = VarPTerm (convertVar v)
+  alg (TupleTerm as) = TuplePTerm as
+  alg (ListTerm as) = ListPTerm as
+  alg (TermBinOp o a b) = PTermBinOp (convertBinOp o) a b
+  alg (TermTerOp o a b c) = PTermTerOp (convertTerOp o) a b c
 
-prettyTConst :: TConst -> Doc
-prettyTConst TTrue = text "1"
-prettyTConst TFalse = text "0"
-prettyTConst (TString s) = text s
-prettyTConst (TInteger i) = integer i
+convertBinOp TAddHead = PAddHead
+-- TODO: convertBinOp TConj = 
+convertBinOp TEquiv = PImpl
 
--- prettyPrint = ppClausePrec 0
+convertTerOp TIf = PIf
+
+convertVar (TId id) = PId id
+convertVar Wildcard = PWildcard
+  
+convertConst TTrue = PTrue
+convertConst TFalse = PFalse
+convertConst (TString s) = PString s
+convertConst (TInteger i) = PInteger i
+
+implResult :: PTerm -> PTerm
+implResult = cata (Fix . alg) where
+  -- TODO: Find unique term instead of "Y"
+  alg (PTermBinOp PImpl a b) = PTermBinOp PImpl (addResultVar a) (addResultVar b)
+  alg e = e
+
+-- TODO: simplify
+addResultVar = unfix >>> addVar >>> Fix where
+  addVar (PFuncApp f args) = PFuncApp f (args ++ [(Fix . VarPTerm . PId) "Y"])
+
+deCapitalized :: String -> String
+deCapitalized (h:t) = toUpper h : t
+
+isCapitalized :: String -> Bool
+isCapitalized = isUpper . head
+
+predicates :: PTerm -> PTerm
+predicates = cata (Fix . alg) where
+  alg t@(PFuncApp a@(PId s) b)
+    | isCapitalized s = PPredicate a b
+    | otherwise       = t
+  alg e = e
+  
+-- replace PConcat and composed functions
+
+-- type AnnAST = Cofree ASTF (Maybe String)
+
+-- addAnn :: AST -> AnnAST
+-- addAnn = cata alg where
+--   alg e@(FuncApp a b) = Just "1" :< e
+--   alg e = Nothing :< e
+
+
+----------------------------------
+-- Print
+----------------------------------
+
+commaSep = punctuate (text ",") >>> cat
+
+prettyProlog :: PTerm -> Doc
+prettyProlog = cata alg where
+  alg (ConstPTerm c) = prettyTConst c
+  alg (VarPTerm v) = prettyTVar v
+  alg (TuplePTerm ts) = list ts
+  alg (ListPTerm ts) = tupled ts
+  alg (PTermBinOp PAddHead a b) = a <> text "#" <> b
+  -- TODO: replace A
+  alg (PTermBinOp PImpl a b) = a <+> text ":-" <+> b
+  -- TODO: alg (PTermTerOp o a b c) = 
+  alg (PAnd as) = commaSep as
+  alg (PFuncApp (PId f) as) = text f <> tupled as
+  alg (PPredicate (PId f) as) = (text . deCapitalized) f <> tupled as
+
+prettyTVar :: PVar -> Doc
+prettyTVar (PId s) = text $ fmap toUpper s
+prettyTVar PWildcard = text "_"
+
+prettyTConst :: PConst -> Doc
+prettyTConst PTrue = text "1"
+prettyTConst PFalse = text "0"
+prettyTConst (PString s) = text s
+prettyTConst (PInteger i) = integer i
+    
+----------------------------------
+-- Composed
+----------------------------------
+
+prettyIsabelleInProlog :: Term -> Doc
+prettyIsabelleInProlog = toPrologAST 
+  >>> predicates
+  >>> implResult 
+  >>> prettyProlog
