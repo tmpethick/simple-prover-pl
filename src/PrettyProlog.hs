@@ -156,21 +156,22 @@ addResultVar = unfix >>> addVar >>> Fix where
 chainNestedFuncApp :: PTerm -> PTerm
 chainNestedFuncApp = createAnd
 
--- | catamorphism to unqiue term. Reader monad with unique term.
--- TODO: not used for now
+-- | Create collection of all used variable names in the parse tree.
+-- TODO: unused. Eventually use to pick unqiue names.
 usedVars :: PTerm -> [String]
 usedVars = cata alg where
   alg (VarPTerm (PId v)) = [v]
   alg e = concat e
 
--- | Annotate (postorder)
+-- | Transform nested function applications into 
+-- | list of function application with a return variable.
 createAnd :: PTerm -> PTerm
 createAnd = addAnn
         >>> evalUniqNameSupplier
         >>> splitOnAnn
         >>> replaceAnn
 
--- create generator monad with supply (reader with state)
+-- Create supply monad with unique names (reader with state).
 labelStream :: [String]
 labelStream = fmap (("X" ++) . show) [0..]
 
