@@ -10,6 +10,7 @@ import Data.Eq.Deriving (deriveEq1)
 import Text.Show.Deriving (deriveShow1)
 import Data.Functor.Identity (Identity)  
 import Data.Char
+import qualified Data.Foldable as F
 import Control.Arrow ((>>>))
 import Text.PrettyPrint.Leijen
 import qualified Control.Comonad.Trans.Cofree as C
@@ -35,7 +36,7 @@ data PVar = PId String | PWildcard deriving (Eq, Show)
 
 data PConst = PTrue | PFalse | PString String | PInteger Integer deriving (Eq, Show)
 
-data PBinOp = PAddHead | PImpl deriving (Eq, Show)
+data PBinOp = PAddHead | PRule deriving (Eq, Show)
 
 data PTerOp = PIf deriving (Eq, Show)
 
@@ -48,6 +49,7 @@ data PTermF a =
   | PTermTerOp PTerOp a a a
   | PAnd [a]
   | PFuncApp PVar [a]
+  | PFact PVar [a]
   | PPredicate PVar [a]
   deriving (Show, Eq, Functor, Foldable, Traversable)
 
@@ -76,6 +78,9 @@ pTermTerOp o a b c = Fix $ PTermTerOp o a b c
 
 pAnd :: [PTerm] -> PTerm
 pAnd = Fix . PAnd
+
+pFact :: PVar -> [PTerm] -> PTerm
+pFact v a = Fix $ PFact v a
 
 pFuncApp :: PVar -> [PTerm] -> PTerm
 pFuncApp v a = Fix $ PFuncApp v a
@@ -109,7 +114,7 @@ toPrologAST = cata (Fix . alg) where
 
 convertBinOp TAddHead = PAddHead
 -- TODO: convertBinOp TConj = 
-convertBinOp TEquiv = PImpl
+convertBinOp TEquiv = PRule
 
 convertTerOp TIf = PIf
 
@@ -138,18 +143,25 @@ predicates = cata (Fix . alg) where
 
 --------- Implication -----------
 
+-- TODO: based Y on last in PAnd.
 implResult :: PTerm -> PTerm
-implResult = cata (Fix . alg) where
-  alg (PTermBinOp PImpl a b) = PTermBinOp PImpl 
-                               (addResultVar a) 
-                               (addResultVar $ chainNestedFuncApp b)
-  alg e = e
+implResult = cata alg where
+  alg (PTermBinOp PRule a b) = case unfix b of
+    (PFuncApp f args) -> pTermBinOp PRule (addResultVar a) (chainNestedFuncApp $ addResultVar b)
+    _                 -> (addArg b >>> convertToFact) a
+  alg e = Fix e
+
+convertToFact = unfix >>> convert >>> Fix where
+  convert (PFuncApp f args) = PFact f args
+
+addArg :: PTerm -> PTerm -> PTerm
+addArg arg = unfix >>> addVar >>> Fix where
+  addVar (PFuncApp f args) = PFuncApp f (args ++ [arg])
 
 -- TODO: simplify with lift?
 -- TODO: Find unique term instead of "Y"
 addResultVar :: PTerm -> PTerm
-addResultVar = unfix >>> addVar >>> Fix where
-  addVar (PFuncApp f args) = PFuncApp f (args ++ [(varPTerm . PId) "Y"])
+addResultVar = addArg $ (varPTerm . PId) "Y"
 
 ------------- chain ---------------
 
@@ -169,6 +181,7 @@ createAnd :: PTerm -> PTerm
 createAnd = addAnn
         >>> evalUniqNameSupplier
         >>> splitOnAnn
+        >>> applyRootAnns
         >>> replaceAnn
 
 -- Create supply monad with unique names (reader with state).
@@ -188,18 +201,30 @@ addAnn = cataM alg where
     return (Just name :< e)
   alg e = return (Nothing :< e)
 
-test :: PTerm -> [Bool]
-test = para alg where
-  alg (ConstPTerm _) = [True]
-  alg pterm = concatMap snd pterm
-
 -- | Create list of parse tree at every annotation
 splitOnAnn :: PTermAnn -> [PTermAnn]
 splitOnAnn = para alg where
   alg :: C.CofreeF PTermF (Maybe String) (PTermAnn, [PTermAnn]) -> [PTermAnn]
   alg (m C.:< term) = case m of
-      Just _  -> [m :< fmap fst term]
-      Nothing -> concatMap snd term
+      Just _  -> F.fold (fmap snd term) ++ [m :< fmap fst term]
+      Nothing -> F.fold (fmap snd term)
+
+-- TODO: Somehow consolidate addVar and addVarAnn. 
+--       Problem is that there is no equivalent of `return` for Fix and Cofree.
+--       The VarTerm need to be wrapped in a Fix/Cofree.
+addVarAnn var (PFuncApp f args) = PFuncApp f (args ++ [Nothing :< (VarPTerm . PId) var])
+
+-- TODO: rewrite to using Cofree functions.
+removeAnn :: PTermAnn -> PTermAnn
+removeAnn (Just _ :< t) = Nothing :< t
+
+moveRootAnnToArg :: PTermAnn -> PTermAnn
+moveRootAnnToArg (Just m :< t) = Nothing :< addVarAnn m t
+
+-- | Append return var to func args and `replaceAnn` do not replace the roots with VarTerm.
+-- | Also do not add to args for the last term since `implResult` does this.
+applyRootAnns :: [PTermAnn] -> [PTermAnn]
+applyRootAnns ts = fmap moveRootAnnToArg (init ts) ++ [removeAnn $ last ts]
 
 -- | Replace child annotation in every parse tree
 -- | and make it syntactically a `PAnd`.
@@ -213,21 +238,22 @@ replaceAnn ts = pAnd $ fmap (cata alg) ts where
 -------------------------------------------------------------------------------
 
 commaSep :: [Doc] -> Doc
-commaSep = punctuate (text ",") >>> cat
+commaSep = punctuate (text ", ") >>> cat
 
 prettyProlog :: PTerm -> Doc
 prettyProlog = cata alg where
-  alg (ConstPTerm c) = prettyTConst c
-  alg (VarPTerm v) = prettyTVar v
-  alg (TuplePTerm ts) = list ts
-  alg (ListPTerm ts) = tupled ts
-  alg (PTermBinOp PAddHead a b) = a <> text "#" <> b
+  alg (ConstPTerm c)            = prettyTConst c
+  alg (VarPTerm v)              = prettyTVar v
+  alg (TuplePTerm ts)           = tupled ts
+  alg (ListPTerm ts)            = list ts
+  alg (PTermBinOp PAddHead a b) = list [a <> text "|" <> b]
   -- TODO: replace A
-  alg (PTermBinOp PImpl a b) = a <+> text ":-" <+> b
-  -- TODO: alg (PTermTerOp o a b c) = 
-  alg (PAnd as) = commaSep as
-  alg (PFuncApp (PId f) as) = text f <> tupled as
-  alg (PPredicate (PId f) as) = (text . deCapitalized) f <> tupled as
+  alg (PTermBinOp PRule a b)    = a <+> text ":-" <+> b <> text "."
+  alg (PFact (PId f) as)        = text f <> tupled as <> text "."
+  -- TODO: alg (PTermTerOp o a b= 
+  alg (PAnd as)                 = commaSep as
+  alg (PFuncApp (PId f) as)     = text f <> tupled as
+  alg (PPredicate (PId f) as)   = (text . deCapitalized) f <> tupled as
 
 prettyTVar :: PVar -> Doc
 prettyTVar (PId s) = text $ fmap toUpper s
@@ -243,8 +269,10 @@ prettyTConst (PInteger i) = integer i
 -- Composed
 -------------------------------------------------------------------------------
 
+isabelleToProlog :: Term -> PTerm
+isabelleToProlog = toPrologAST 
+               >>> predicates
+               >>> implResult 
+
 prettyIsabelleInProlog :: Term -> Doc
-prettyIsabelleInProlog = toPrologAST 
-  >>> predicates
-  >>> implResult 
-  >>> prettyProlog
+prettyIsabelleInProlog = isabelleToProlog >>> prettyProlog

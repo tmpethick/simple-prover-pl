@@ -67,4 +67,8 @@ prettyTConst (TInteger i) = integer i
 
 -- Hack: Explicit state width of 1000 to avoid newlines.
 -- Default would otherwise be `show $ prettyPrintPrec 0 term`.
-prettyPrint term = (displayS . renderPretty 1 1000 . prettyPrintPrec) term ""
+docToString :: Doc -> String
+docToString doc = (displayS . renderPretty 1 1000) doc ""
+
+prettyPrint :: Term -> String
+prettyPrint = docToString . prettyPrintPrec
