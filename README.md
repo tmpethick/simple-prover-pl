@@ -37,3 +37,61 @@ TODO
 
 - Quantifiers
 - Multiple terms/statements
+- Precedence for Prolog
+
+
+Notes
+-----
+
+https://wiki.haskell.org/Parsing_expressions_and_statements
+
+Token based passing (lexer)
+
+Parsec
+  - parenthesis are described in Parsec Not in data type/AST.
+  - leave out all before `.`. Should be represented in to AST but not - used by prolog.
+  - how to deal with False = True \equiv False (the infix function - definition)?
+
+State: Functions are also TVal in functional languages. 
+- Problem: how to capitalize only arguments and not function name?
+- Solution: Use structure. Every SeqTerm with a starting TVal must - be a function. 
+- Example: (draw tree for ((a b) c)).
+
+
+Should 0, asd, "asd" and [] be represented differently in AST?
+- Yes [] is necessary for changing representation.
+
+
+Should @ be append on parsing?
+- Should # be add
+
+
+Tuples: parser will strip parentases. commas can then be parsed - as binary relations.
+- Problem: collision with list type..
+
+
+Point: testing can be done by defining pretty printing. (it is - the identity function then).
+
+Examples:
+  - prover (h # t) ≡ prover (solves (h # t))
+  - "⋀p. check p ≡ prover [[(0,p)]]"
+  - "⋀h t. prover (h # t) ≡ prover (solves (h # t))"
+  - "prover [] ≡ True"
+  - "solves [] ≡ []"
+  - "⋀ h t. solves (h # t) ≡ solve h @ solves t"
+
+Test cases
+  - test equiv
+  - test func app
+  - test equiv
+  - test precedence
+  - test primitive
+  - add support for [] (same as parens by what precedence?) [Exp] 
+  - (supports [], [a#b], [a @ b] <-- just expressions inside. 
+  -  tricky: [a,b], since a,b is tuple.)
+  - add support for And
+  - add tuple ,
+
+how to deal with append when this is overwriten?
+  - eq
+  - quantifiers
