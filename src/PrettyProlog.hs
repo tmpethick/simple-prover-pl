@@ -1,4 +1,9 @@
-{-# LANGUAGE TemplateHaskell, FlexibleContexts, DeriveFunctor, DeriveFoldable, DeriveTraversable #-}
+{-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE DeriveFunctor #-}
+{-# LANGUAGE DeriveFoldable #-}
+{-# LANGUAGE DeriveTraversable #-}
+
 module PrettyProlog where
 
 import Data.Eq.Deriving (deriveEq1)
@@ -7,13 +12,14 @@ import Data.Functor.Identity (Identity)
 import Data.Char
 import Control.Arrow ((>>>))
 import Text.PrettyPrint.Leijen
-import Control.Comonad.Cofree
+import qualified Control.Comonad.Trans.Cofree as C
+import Control.Comonad.Cofree (Cofree((:<)))
 import Control.Monad.Free
 import Data.Functor.Foldable
+import Control.Monad.Supply (Supply, supply, evalSupply)
 
+import Foldable (cataM)
 import Parse (
-  parser,
-  parse',
   Term,
   TermF(TermBinOp, TermTerOp, TupleTerm, ConstTerm, ListTerm, VarTerm),
   TVar(TId, Wildcard),
@@ -21,9 +27,9 @@ import Parse (
   TBinOp(TFunc, TEquiv, TAddHead, TConcat, TConj),
   TTerOp(TIf))
 
-----------------------------------
+-------------------------------------------------------------------------------
 -- Types
-----------------------------------
+-------------------------------------------------------------------------------
 
 data PVar = PId String | PWildcard deriving (Eq, Show)
 
@@ -34,7 +40,7 @@ data PBinOp = PAddHead | PImpl deriving (Eq, Show)
 data PTerOp = PIf deriving (Eq, Show)
 
 data PTermF a = 
-  ConstPTerm PConst
+    ConstPTerm PConst
   | VarPTerm PVar
   | TuplePTerm [a]
   | ListPTerm [a]
@@ -50,9 +56,38 @@ deriveEq1 ''PTermF
 
 type PTerm = Fix PTermF
 
-----------------------------------
+constPTerm :: PConst -> PTerm
+constPTerm = Fix . ConstPTerm
+
+varPTerm :: PVar -> PTerm
+varPTerm = Fix . VarPTerm
+
+tuplePTerm :: [PTerm] -> PTerm
+tuplePTerm = Fix . TuplePTerm
+
+listPTerm :: [PTerm] -> PTerm
+listPTerm = Fix . ListPTerm
+
+pTermBinOp :: PBinOp -> PTerm -> PTerm -> PTerm
+pTermBinOp o a b = Fix $ PTermBinOp o a b
+
+pTermTerOp :: PTerOp -> PTerm -> PTerm -> PTerm -> PTerm
+pTermTerOp o a b c = Fix $ PTermTerOp o a b c
+
+pAnd :: [PTerm] -> PTerm
+pAnd = Fix . PAnd
+
+pFuncApp :: PVar -> [PTerm] -> PTerm
+pFuncApp v a = Fix $ PFuncApp v a
+
+pPredicate :: PVar -> [PTerm] -> PTerm
+pPredicate v a = Fix $ PPredicate v a
+
+-------------------------------------------------------------------------------
 -- To Prolog AST
-----------------------------------
+-------------------------------------------------------------------------------
+
+-------- AST convertion ----------
 
 toPrologAST :: Term -> PTerm
 toPrologAST = cata (Fix . alg) where
@@ -86,21 +121,13 @@ convertConst TFalse = PFalse
 convertConst (TString s) = PString s
 convertConst (TInteger i) = PInteger i
 
-implResult :: PTerm -> PTerm
-implResult = cata (Fix . alg) where
-  -- TODO: Find unique term instead of "Y"
-  alg (PTermBinOp PImpl a b) = PTermBinOp PImpl (addResultVar a) (addResultVar b)
-  alg e = e
-
--- TODO: simplify
-addResultVar = unfix >>> addVar >>> Fix where
-  addVar (PFuncApp f args) = PFuncApp f (args ++ [(Fix . VarPTerm . PId) "Y"])
-
-deCapitalized :: String -> String
-deCapitalized (h:t) = toUpper h : t
+---------- Predicates -----------
 
 isCapitalized :: String -> Bool
 isCapitalized = isUpper . head
+
+deCapitalized :: String -> String
+deCapitalized (h:t) = toUpper h : t
 
 predicates :: PTerm -> PTerm
 predicates = cata (Fix . alg) where
@@ -108,21 +135,83 @@ predicates = cata (Fix . alg) where
     | isCapitalized s = PPredicate a b
     | otherwise       = t
   alg e = e
-  
--- replace PConcat and composed functions
 
--- type AnnAST = Cofree ASTF (Maybe String)
+--------- Implication -----------
 
--- addAnn :: AST -> AnnAST
--- addAnn = cata alg where
---   alg e@(FuncApp a b) = Just "1" :< e
---   alg e = Nothing :< e
+implResult :: PTerm -> PTerm
+implResult = cata (Fix . alg) where
+  alg (PTermBinOp PImpl a b) = PTermBinOp PImpl 
+                               (addResultVar a) 
+                               (addResultVar $ chainNestedFuncApp b)
+  alg e = e
 
+-- TODO: simplify with lift?
+-- TODO: Find unique term instead of "Y"
+addResultVar :: PTerm -> PTerm
+addResultVar = unfix >>> addVar >>> Fix where
+  addVar (PFuncApp f args) = PFuncApp f (args ++ [(varPTerm . PId) "Y"])
 
-----------------------------------
+------------- chain ---------------
+
+chainNestedFuncApp :: PTerm -> PTerm
+chainNestedFuncApp = createAnd
+
+-- | catamorphism to unqiue term. Reader monad with unique term.
+-- TODO: not used for now
+usedVars :: PTerm -> [String]
+usedVars = cata alg where
+  alg (VarPTerm (PId v)) = [v]
+  alg e = concat e
+
+-- | Annotate (postorder)
+createAnd :: PTerm -> PTerm
+createAnd = addAnn
+        >>> evalUniqNameSupplier
+        >>> splitOnAnn
+        >>> replaceAnn
+
+-- create generator monad with supply (reader with state)
+labelStream :: [String]
+labelStream = fmap (("X" ++) . show) [0..]
+
+evalUniqNameSupplier :: Supply String c -> c
+evalUniqNameSupplier = flip evalSupply labelStream
+
+-- | Annotate every function application
+type PTermAnn = Cofree PTermF (Maybe String)
+
+addAnn :: PTerm -> Supply String PTermAnn
+addAnn = cataM alg where
+  alg e@(PFuncApp a b) = do 
+    name <- supply 
+    return (Just name :< e)
+  alg e = return (Nothing :< e)
+
+test :: PTerm -> [Bool]
+test = para alg where
+  alg (ConstPTerm _) = [True]
+  alg pterm = concatMap snd pterm
+
+-- | Create list of parse tree at every annotation
+splitOnAnn :: PTermAnn -> [PTermAnn]
+splitOnAnn = para alg where
+  alg :: C.CofreeF PTermF (Maybe String) (PTermAnn, [PTermAnn]) -> [PTermAnn]
+  alg (m C.:< term) = case m of
+      Just _  -> [m :< fmap fst term]
+      Nothing -> concatMap snd term
+
+-- | Replace child annotation in every parse tree
+-- | and make it syntactically a `PAnd`.
+replaceAnn :: [PTermAnn] -> PTerm
+replaceAnn ts = pAnd $ fmap (cata alg) ts where
+  alg (Just a C.:<    _) = (varPTerm . PId) a
+  alg (_      C.:< term) = Fix term
+
+-------------------------------------------------------------------------------
 -- Print
-----------------------------------
+-------------------------------------------------------------------------------
 
+commaSep :: [Doc] -> Doc
 commaSep = punctuate (text ",") >>> cat
 
 prettyProlog :: PTerm -> Doc
@@ -149,9 +238,9 @@ prettyTConst PFalse = text "0"
 prettyTConst (PString s) = text s
 prettyTConst (PInteger i) = integer i
     
-----------------------------------
+-------------------------------------------------------------------------------
 -- Composed
-----------------------------------
+-------------------------------------------------------------------------------
 
 prettyIsabelleInProlog :: Term -> Doc
 prettyIsabelleInProlog = toPrologAST 
