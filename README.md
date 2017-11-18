@@ -45,6 +45,10 @@ Notes
 
 https://wiki.haskell.org/Parsing_expressions_and_statements
 
+- Prolog decision: do not use true/false but instead built everything yourself (closer to the idea of Simple Prover and how not to rely on language specific features).
+- Why not represent infix operators generally as `BinOp String a a`? Then we can't specify precedence.
+TODO: bind together precedence on parsing and printing. Currently ifelse has incorrect precedence when parsed.
+
 Token based passing (lexer)
 
 Parsec

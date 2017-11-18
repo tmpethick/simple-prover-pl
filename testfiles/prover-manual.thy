@@ -1,3 +1,44 @@
+\<open>\<And>p. check p \<equiv> prover [[(0,p)]]\<close>
+\<open>\<And>h t. prover (h # t) \<equiv> prover (solves (h # t))\<close>
+\<open>prover [] \<equiv> True\<close>
+\<open>solves [] \<equiv> []\<close>
+\<open>\<And>h t. solves (h # t) \<equiv> solve h @ solves t\<close>
+\<open>solve [] \<equiv> [[]]\<close>
+\<open>\<And>h t. solve (h # t) \<equiv> track t (fst h) (snd h)\<close>
+\<open>\<And>s n b i v. track s n (Pre b i v) \<equiv> stop [s @ [(0,Pre b i v)]] (Pre (\<not> b) i v) (base s)\<close>
+\<open>\<And>s n p q. track s n (Con p q) \<equiv> [s @ [(0,p)],s @ [(0,q)]]\<close>
+\<open>\<And>s n p q. track s n (Dis p q) \<equiv> [s @ [(0,p),(0,q)]]\<close>
+\<open>\<And>s n p. track s n (Uni p) \<equiv> [s @ [(0,subst 0 (fresh (frees (Uni p # base s))) p)]]\<close>
+\<open>\<And>s n p. track s n (Exi p) \<equiv> [s @ [(0,subst 0 n p),(Suc n,Exi p)]]\<close>
+\<open>\<And>c p. stop c p [] \<equiv> c\<close>
+\<open>\<And>c p h t. stop c p (h # t) \<equiv> (if p = h then [] else stop c p t)\<close>
+\<open>base [] \<equiv> []\<close>
+\<open>\<And>h t. base (h # t) \<equiv> snd h # base t\<close>
+\<open>\<And>x s b i v. subst x s (Pre b i v) \<equiv> Pre b i (mend x s v)\<close>
+\<open>\<And>x s p q. subst x s (Con p q) \<equiv> Con (subst x s p) (subst x s q)\<close>
+\<open>\<And>x s p q. subst x s (Dis p q) \<equiv> Dis (subst x s p) (subst x s q)\<close>
+\<open>\<And>x s p. subst x s (Uni p) \<equiv> Uni (subst (Suc x) (Suc s) p)\<close>
+\<open>\<And>x s p. subst x s (Exi p) \<equiv> Exi (subst (Suc x) (Suc s) p)\<close>
+\<open>\<And>x s. mend x s [] \<equiv> []\<close>
+\<open>\<And>x s h t. mend x s (h # t) \<equiv> more x s h (sub h x) # mend x s t\<close>
+\<open>\<And>x s h. more x s h 0 \<equiv> over s h (sub x h)\<close>
+\<open>\<And>x s h n. more x s h (Suc n) \<equiv> dec h\<close>
+\<open>\<And>s h. over s h 0 \<equiv> s\<close>
+\<open>\<And>s h n. over s h (Suc n) \<equiv> h\<close>
+\<open>fresh [] \<equiv> 0\<close>
+\<open>\<And>h t. fresh (h # t) \<equiv> Suc (add (sub (dec (fresh t)) h) h)\<close>
+\<open>frees [] \<equiv> []\<close>
+\<open>\<And>h t. frees (h # t) \<equiv> free h @ frees t\<close>
+\<open>\<And>b i v. free (Pre b i v) \<equiv> v\<close>
+\<open>\<And>p q. free (Con p q) \<equiv> free p @ free q\<close>
+\<open>\<And>p q. free (Dis p q) \<equiv> free p @ free q\<close>
+\<open>\<And>p. free (Uni p) \<equiv> dump (free p)\<close>
+\<open>\<And>p. free (Exi p) \<equiv> dump (free p)\<close>
+\<open>dump [] \<equiv> []\<close>
+\<open>\<And>h t. dump (h # t) \<equiv> dash (dump t) h\<close>
+\<open>\<And>l. dash l 0 \<equiv> l\<close>
+\<open>\<And>l n. dash l (Suc n) \<equiv> n # l\<close>
+
 \<open>\<And>b i v p q. Pre b i v = Con p q \<equiv> False\<close>
 \<open>\<And>b i v p q. Con p q = Pre b i v \<equiv> False\<close>
 \<open>\<And>b i v p q. Pre b i v = Dis p q \<equiv> False\<close>

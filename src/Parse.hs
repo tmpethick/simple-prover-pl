@@ -21,23 +21,31 @@ data TConst =
   | TInteger Integer 
   deriving (Eq, Show)
 
+data TUniOp = TNot deriving (Eq, Show)
+
 data TBinOp = 
-    TFunc 
+      TFunc 
     | TAddHead 
     | TConcat 
+    | TEq
     | TConj 
     | TEquiv 
   deriving (Eq, Show)
 
 data TTerOp = TIf deriving (Eq, Show)
 
+data TQuant = TUni deriving (Eq, Show)
+
 data TermF a = 
-  ConstTerm TConst
+    ConstTerm TConst
   | VarTerm TVar
   | TupleTerm [a]
   | ListTerm [a]
+  | TermUniOp TUniOp a
   | TermBinOp TBinOp a a
   | TermTerOp TTerOp a a a
+  | TermQuant TQuant [TVar] a
+  | TermCart [a]
   deriving (Show, Eq, Functor, Foldable, Traversable)
 
 deriveShow1 ''TermF
@@ -57,11 +65,20 @@ tupleTerm = Fix . TupleTerm
 listTerm :: [Term] -> Term
 listTerm = Fix . ListTerm
 
+termUniOp :: TUniOp -> Term -> Term
+termUniOp o a = Fix $ TermUniOp o a
+
 termBinOp :: TBinOp -> Term -> Term -> Term
 termBinOp o a b = Fix $ TermBinOp o a b
 
 termTerOp :: TTerOp -> Term -> Term -> Term -> Term
 termTerOp o a b c = Fix $ TermTerOp o a b c
+
+termCart :: [Term] -> Term
+termCart = Fix . TermCart
+
+termQuant :: TQuant -> [TVar] -> Term -> Term
+termQuant q vs e = Fix $ TermQuant q vs e
 
 langDef :: Token.LanguageDef ()
 langDef = Token.LanguageDef
@@ -72,9 +89,11 @@ langDef = Token.LanguageDef
   , Token.identStart      = letter
   , Token.identLetter     = alphaNum <|> oneOf "_'"
   , Token.opStart         = Token.opLetter langDef
-  , Token.opLetter        = oneOf ",:!#$%&*+./<=>?@\\^|-~"
-  , Token.reservedNames   = ["True", "False"]
-  , Token.reservedOpNames = ["\\<equiv>", "#", "@", "if", "then", "else"]
+  , Token.opLetter        = oneOf ""
+  , Token.reservedNames   = ["True", "False", "if", "then", "else"]
+  , Token.reservedOpNames = ["\\<not>", "\\<and>", "\\<And>", ".",
+                             "\\<open>", "\\<close>", "\\<equiv>", 
+                             "#", "@", "=", "if", "then", "else"]
   , Token.caseSensitive   = True
   }
 
@@ -111,44 +130,69 @@ list p = (inList . sepByComma) p <?> "list"
 tuple :: StringParser Term -> StringParser Term
 tuple p = (inTuple . sepByComma2) p <?> "tuple"
 
-xp :: StringParser Term
-xp = buildExpressionParser table term <?> "expression"
--- TODO: move whiteSpace to mainParser
--- mainParser = m_whiteSpace >> xp
+expr :: StringParser Term
+expr = buildExpressionParser table term <?> "expression"
 
 -- Use `try` since `m_parens` and `tuple` shares the same starting char.
 -- TODO: using `try` might not be desirable.. (research why)
-term = try (m_parens xp)
-  <|> tuple xp 
-  <|> list xp
-  <|> (m_reserved "True"     >> return (constTerm TTrue))
-  <|> (m_reserved "False"    >> return (constTerm TFalse))
+term = try (m_parens expr)
+  <|> pQuant
+  <|> pIf expr
+  <|> tuple expr 
+  <|> list expr
+  <|> (m_reserved "True"  >> return (constTerm TTrue))
+  <|> (m_reserved "False" >> return (constTerm TFalse))
   <|> (constTerm . TInteger) <$> m_natural
-  <|> (varTerm . TId)        <$> m_identifier
-  <|> pIf xp
+  <|> ((varTerm . TId) <$> m_identifier)
 
-table = [ 
-    [Infix pFuncApp Expr.AssocLeft],
-    [Infix pConcat Expr.AssocLeft ],
-    [Infix pAdd Expr.AssocLeft    ],
-    [Infix pEquiv Expr.AssocLeft  ]
-    ]
+table = [[Prefix pNot],
+         [Infix  pFuncApp Expr.AssocLeft],
+         [Infix  pConcat  Expr.AssocLeft],
+         [Infix  pAdd     Expr.AssocLeft],
+         [Infix  pEq      Expr.AssocLeft],
+         [Infix  pConj    Expr.AssocLeft],
+         [Infix  pEquiv   Expr.AssocLeft]]
     
 -- Function application is just whitespace.. 
 pFuncApp = return (termBinOp TFunc)
 
+pNot    = m_reservedOp "\\<not>"   >> return (termUniOp TNot)
 pAdd    = m_reservedOp "#"         >> return (termBinOp TAddHead)
 pConcat = m_reservedOp "@"         >> return (termBinOp TConcat)
+pConj   = m_reservedOp "\\<and>"   >> return (termBinOp TConj)
+pEq     = m_reservedOp "="         >> return (termBinOp TEq)
 pEquiv  = m_reservedOp "\\<equiv>" >> return (termBinOp TEquiv)
 
 -- TODO: rewrite or keep for readability?
 pIf expr = do 
-  m_reserved "if"
+  m_reservedOp "if"
   b <- expr
-  m_reserved "then"
+  m_reservedOp "then"
   p <- expr
-  m_reserved "else"
+  m_reservedOp "else"
   q <- expr
   return (termTerOp TIf b p q)
 
-parser = m_whiteSpace >> xp <* eof
+parseVar :: StringParser TVar
+parseVar = TId <$> m_identifier
+
+quantVars = sepBy1 parseVar m_whiteSpace
+
+pQuant :: StringParser Term
+pQuant = do
+  m_reservedOp "\\<And>"
+  vs <- quantVars 
+  m_reservedOp "." 
+  e <- expr
+  return (termQuant TUni vs e)
+  
+parser = m_whiteSpace >> expr <* eof  
+
+cartouche :: StringParser Term
+cartouche = m_reservedOp "\\<open>" >> expr <* m_reservedOp "\\<close>"
+
+cartouches :: StringParser Term
+cartouches = termCart <$> sepBy cartouche m_whiteSpace
+
+fullParser :: StringParser Term
+fullParser = m_whiteSpace >> cartouches <* eof
