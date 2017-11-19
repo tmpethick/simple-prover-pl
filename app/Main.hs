@@ -1,6 +1,20 @@
 module Main where
 
-import Parse (parse', parser)
+  import System.Environment
+  import Control.Arrow ((>>>))
 
-main :: IO ()
-main = print "a"-- parse' parser "prover (h # t) ≡ prover (solves (h # t))"
+  import Parse (parseIsabelleFile)
+  import PrettyProlog (isabelleToProlog, prettyProlog)
+  import Pretty (docToString)
+
+  translate :: String -> IO ()
+  translate fileName = parseIsabelleFile fileName
+    >>= (isabelleToProlog
+    >>> prettyProlog 
+    >>> docToString
+    >>> putStr)
+
+  main :: IO ()
+  main = do
+    fileNames <- getArgs
+    mapM_ translate fileNames

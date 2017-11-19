@@ -3,12 +3,16 @@ module Parse where
 
 import Data.Functor.Foldable
 import Text.Parsec
+import Text.Parsec.String
 import Data.Eq.Deriving (deriveEq1)
 import Text.Show.Deriving (deriveShow1)
 import Text.Parsec.Token as Token
 import Text.Parsec.Expr as Expr
 import Control.Applicative hiding ((<|>), many)
 import Data.Functor.Identity (Identity)
+ 
+import System.Exit
+import Debug.Trace
 
 parse' rule = parse rule "(source)"
 
@@ -196,3 +200,17 @@ cartouches = termCart <$> sepBy cartouche m_whiteSpace
 
 fullParser :: StringParser Term
 fullParser = m_whiteSpace >> cartouches <* eof
+
+-------------------------------------------------------------------------------
+-- Files
+-------------------------------------------------------------------------------
+
+parseFile :: Parser a -> String -> IO a
+parseFile p fileName = parseFromFile p fileName >>= either report return
+  where
+    report err = do
+        traceIO $ "Error: " ++ show err
+        exitFailure
+
+parseIsabelleFile :: String -> IO Term
+parseIsabelleFile = parseFile fullParser

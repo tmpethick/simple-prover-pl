@@ -5,7 +5,7 @@ module PrettyPrologSpec (main, spec) where
   import Test.Hspec
   import Test.Hspec.Attoparsec
   import Control.Arrow ((>>>))
-  import Parse (Term, parse', parser)
+  import Parse (StringParser, Term, parse', parser, fullParser)
   import Pretty (docToString)
   import Control.Comonad.Cofree  
   import PrettyProlog (
@@ -18,25 +18,28 @@ module PrettyPrologSpec (main, spec) where
     PTermF(ConstPTerm, PFuncApp, VarPTerm),
     PConst(PTrue, PFalse),
     PVar(PId))
-  
-  -- -- TODO: catch left error
-  -- testProlog test expected = show (ppHeadPrec 0 Nothing term) `shouldBe` expected
-  --             where Right term = parse' parser test
+  import Control.Monad (forM_)
+    
+  import TestCases (simpleProverPair)
 
   testProlog :: (Term -> PTerm) -> String -> PTerm -> Expectation
-  testProlog f test expected = val `shouldBe` expected
-            where 
-              Right isabelle = parse' parser test
-              val = f isabelle
+  testProlog f test expected = case parse' parser test of 
+    Right isabelle -> f isabelle `shouldBe` expected
+    Left err       -> error $ show err
 
+  toPrologPredicates :: Term -> PTerm
   toPrologPredicates = toPrologAST >>> predicates
-
-  toProlog = parse' parser >>> justRight 
-         >>> isabelleToProlog where
+  
+  toProlog :: StringParser Term -> String -> PTerm
+  toProlog parser = parse' parser >>> justRight >>> isabelleToProlog where
     justRight (Right ast) = ast
-    justRight (Left err)  = error "Error pasing isabelle"
+    justRight (Left err)  = error $ show err
 
-  translate = toProlog >>> prettyProlog >>> docToString
+  translate :: StringParser Term -> String -> String
+  translate parser = toProlog parser >>> prettyProlog >>> docToString
+
+  translateExpr = translate parser
+  translateFull = translate fullParser
 
   spec :: Spec
   spec = 
@@ -49,25 +52,28 @@ module PrettyPrologSpec (main, spec) where
           testProlog toPrologPredicates "P a b" (pPredicate (PId "P") [varPTerm $ PId "a", varPTerm $ PId "b"])
       -- TODO: replace with more focused testing and leave e2e to a separate test.
       context "prettyIsabelleInProlog" $ do
-          it "prints lists" $ translate "[True,True]"
-                             `shouldBe` "[1,1]"
-          it "check p"      $ translate "check p \\<equiv> prover [[(0,p)]]"
-                             `shouldBe` "check(P,Y) :- prover([[(0,P)]],Y)."
-          it "prover []"    $ translate "prover [] \\<equiv> True"
-                             `shouldBe` "prover([],1)."
-          it "prover h"     $ translate "prover (h # t) \\<equiv> prover (solves (h # t))"
-                             `shouldBe` "prover([H|T],Y) :- solves([H|T],X0), prover(X0,Y)."
-          it "solves []"    $ translate "solves [] \\<equiv> []"
-                             `shouldBe` "solves([],[])."
-          it "solves h"     $ translate "solves (h # t) \\<equiv> solve h @ solves t"
-                             `shouldBe` "solves([H|T],Y) :- solve(H,X0), solves(T,X1), append(X0,X1,Y)."
+          it "prints lists" $ translateExpr "[True,True]"
+                                 `shouldBe` "[1,1]"
+          it "check p"      $ translateExpr "check p \\<equiv> prover [[(0,p)]]"
+                                 `shouldBe` "check(P,Y) :- prover([[(0,P)]],Y)."
+          it "prover []"    $ translateExpr "prover [] \\<equiv> True"
+                                 `shouldBe` "prover([],1)."
+          it "prover h"     $ translateExpr "prover (h # t) \\<equiv> prover (solves (h # t))"
+                                 `shouldBe` "prover([H|T],Y) :- solves([H|T],X0), prover(X0,Y)."
+          it "solves []"    $ translateExpr "solves [] \\<equiv> []"
+                                 `shouldBe` "solves([],[])."
+          it "solves h"     $ translateExpr "solves (h # t) \\<equiv> solve h @ solves t"
+                                 `shouldBe` "solves([H|T],Y) :- solve(H,X0), solves(T,X1), append(X0,X1,Y)."
       context "annotation" $
         it "should split nested func app" $
           let annotate = splitOnAnn . evalUniqNameSupplier . addAnn
-          in annotate (toProlog "prover(solve(a))") `shouldBe` 
+          in annotate (toProlog parser "prover(solve(a))") `shouldBe` 
           [Just "X0" :< PFuncApp (PId "solve")  [Nothing :< VarPTerm (PId "a")],
            Just "X1" :< PFuncApp (PId "prover") [Just "X0" :< PFuncApp (PId "solve") 
                                                 [Nothing :< VarPTerm (PId "a")]]]
+      context "Simple Prover" $  
+        forM_ [simpleProverPair !! 8] $ \(isabelle, prolog) -> 
+          it ("test " ++ isabelle) $ translateFull isabelle `shouldBe` prolog
 
   main :: IO ()
   main = hspec spec

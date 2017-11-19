@@ -11,7 +11,7 @@ import Text.Show.Deriving (deriveShow1)
 import Data.Functor.Identity (Identity)  
 import Data.Char
 import qualified Data.Foldable as F
-import Control.Arrow ((>>>))
+import Control.Arrow ((>>>), (&&&))
 import Text.PrettyPrint.Leijen
 import qualified Control.Comonad.Trans.Cofree as C
 import Control.Comonad.Cofree (Cofree((:<)))
@@ -22,10 +22,13 @@ import Control.Monad.Supply (Supply, supply, evalSupply)
 import Foldable (cataM)
 import Parse (
   Term,
-  TermF(TermBinOp, TermTerOp, TupleTerm, ConstTerm, ListTerm, VarTerm),
+  TermF(TermUniOp, TermBinOp, TermTerOp,
+    TupleTerm, ConstTerm, ListTerm, VarTerm,
+    TermQuant, TermCart),
+  TUniOp(TNot),
   TVar(TId, Wildcard),
   TConst(TTrue, TFalse, TString, TInteger),
-  TBinOp(TFunc, TEquiv, TAddHead, TConcat, TConj),
+  TBinOp(TFunc, TEquiv, TAddHead, TConcat, TConj, TEq),
   TTerOp(TIf))
 
 -------------------------------------------------------------------------------
@@ -51,6 +54,7 @@ data PTermF a =
   | PFuncApp PVar [a]
   | PFact PVar [a]
   | PPredicate PVar [a]
+  | PTerms [a]
   deriving (Show, Eq, Functor, Foldable, Traversable)
 
 deriveShow1 ''PTermF
@@ -88,6 +92,9 @@ pFuncApp v a = Fix $ PFuncApp v a
 pPredicate :: PVar -> [PTerm] -> PTerm
 pPredicate v a = Fix $ PPredicate v a
 
+pTerms :: [PTerm] -> PTerm
+pTerms as = Fix $ PTerms as
+
 -------------------------------------------------------------------------------
 -- To Prolog AST
 -------------------------------------------------------------------------------
@@ -95,35 +102,39 @@ pPredicate v a = Fix $ PPredicate v a
 -------- AST convertion ----------
 
 toPrologAST :: Term -> PTerm
-toPrologAST = cata (Fix . alg) where
+toPrologAST = cata alg where
   -- Convert nested one arg function applications
   alg (TermBinOp TFunc a b) = case unfix a of 
-    (VarPTerm f) -> PFuncApp f [b]
-    (PFuncApp f b') -> PFuncApp f (b' ++ [b])
+    (VarPTerm f)    -> pFuncApp f [b]
+    (PFuncApp f b') -> pFuncApp f (b' ++ [b])
   
-  -- Concat is just a function call
-  alg (TermBinOp TConcat a b) = PFuncApp (PId "append") [a, b]
-
+  -- Concat and not is just a function call
+  alg (TermBinOp TConcat a b) = pFuncApp (PId "append") [a, b]
+  alg (TermBinOp TEq a b)     = pFuncApp (PId "eq") [a, b]
+  alg (TermBinOp TConj a b)   = pFuncApp (PId "con") [a, b]
+  alg (TermUniOp TNot a)      = pFuncApp (PId "not") [a]
+  
   -- 1-to-1 translations
-  alg (ConstTerm c) = ConstPTerm (convertConst c)
-  alg (VarTerm v) = VarPTerm (convertVar v)
-  alg (TupleTerm as) = TuplePTerm as
-  alg (ListTerm as) = ListPTerm as
-  alg (TermBinOp o a b) = PTermBinOp (convertBinOp o) a b
-  alg (TermTerOp o a b c) = PTermTerOp (convertTerOp o) a b c
+  alg (ConstTerm c)       = constPTerm (convertConst c)
+  alg (VarTerm v)         = varPTerm (convertVar v)
+  alg (TupleTerm as)      = tuplePTerm as
+  alg (ListTerm as)       = listPTerm as
+  alg (TermBinOp o a b)   = pTermBinOp (convertBinOp o) a b
+  alg (TermTerOp o a b c) = pTermTerOp (convertTerOp o) a b c
+  alg (TermQuant _ _ a)   = a
+  alg (TermCart as)       = pTerms as
 
 convertBinOp TAddHead = PAddHead
--- TODO: convertBinOp TConj = 
-convertBinOp TEquiv = PRule
+convertBinOp TEquiv   = PRule
 
 convertTerOp TIf = PIf
 
 convertVar (TId id) = PId id
 convertVar Wildcard = PWildcard
   
-convertConst TTrue = PTrue
-convertConst TFalse = PFalse
-convertConst (TString s) = PString s
+convertConst TTrue        = PTrue
+convertConst TFalse       = PFalse
+convertConst (TString s)  = PString s
 convertConst (TInteger i) = PInteger i
 
 ---------- Predicates -----------
@@ -132,7 +143,7 @@ isCapitalized :: String -> Bool
 isCapitalized = isUpper . head
 
 deCapitalized :: String -> String
-deCapitalized (h:t) = toUpper h : t
+deCapitalized (h:t) = toLower h : t
 
 predicates :: PTerm -> PTerm
 predicates = cata (Fix . alg) where
@@ -146,27 +157,33 @@ predicates = cata (Fix . alg) where
 -- TODO: based Y on last in PAnd.
 implResult :: PTerm -> PTerm
 implResult = cata alg where
-  alg (PTermBinOp PRule a b) = case unfix b of
-    (PFuncApp f args) -> pTermBinOp PRule (addResultVar a) (chainNestedFuncApp $ addResultVar b)
-    _                 -> (addArg b >>> convertToFact) a
+  alg (PTermBinOp PRule a b) = 
+    let 
+      (depTerms, bodyRoot) = chainNestedFuncApp b
+      head = case unfix bodyRoot of
+        (PFuncApp f args) -> addResultVar a
+        _                 -> addArg bodyRoot a
+      bodyTerms = case unfix bodyRoot of
+        (PFuncApp f args) -> depTerms ++ [addResultVar bodyRoot]
+        _                 -> depTerms
+    in case bodyTerms of
+      [] -> convertToFact head
+      _  -> pTermBinOp PRule head (pAnd bodyTerms)
   alg e = Fix e
 
 convertToFact = unfix >>> convert >>> Fix where
   convert (PFuncApp f args) = PFact f args
 
+-- TODO: simplify unfix/fix with lift analog?
 addArg :: PTerm -> PTerm -> PTerm
 addArg arg = unfix >>> addVar >>> Fix where
   addVar (PFuncApp f args) = PFuncApp f (args ++ [arg])
 
--- TODO: simplify with lift?
 -- TODO: Find unique term instead of "Y"
 addResultVar :: PTerm -> PTerm
 addResultVar = addArg $ (varPTerm . PId) "Y"
 
 ------------- chain ---------------
-
-chainNestedFuncApp :: PTerm -> PTerm
-chainNestedFuncApp = createAnd
 
 -- | Create collection of all used variable names in the parse tree.
 -- TODO: unused. Eventually use to pick unqiue names.
@@ -177,12 +194,11 @@ usedVars = cata alg where
 
 -- | Transform nested function applications into 
 -- | list of function application with a return variable.
-createAnd :: PTerm -> PTerm
-createAnd = addAnn
+chainNestedFuncApp :: PTerm -> ([PTerm], PTerm)
+chainNestedFuncApp = addAnn
         >>> evalUniqNameSupplier
-        >>> splitOnAnn
-        >>> applyRootAnns
-        >>> replaceAnn
+        >>> removeRootAnn
+        >>> ((splitOnAnn >>> applyRootAnns >>> replaceAnns) &&& replaceAnn)
 
 -- Create supply monad with unique names (reader with state).
 labelStream :: [String]
@@ -215,8 +231,8 @@ splitOnAnn = para alg where
 addVarAnn var (PFuncApp f args) = PFuncApp f (args ++ [Nothing :< (VarPTerm . PId) var])
 
 -- TODO: rewrite to using Cofree functions.
-removeAnn :: PTermAnn -> PTermAnn
-removeAnn (Just _ :< t) = Nothing :< t
+removeRootAnn :: PTermAnn -> PTermAnn
+removeRootAnn (_ :< t) = Nothing :< t
 
 moveRootAnnToArg :: PTermAnn -> PTermAnn
 moveRootAnnToArg (Just m :< t) = Nothing :< addVarAnn m t
@@ -224,14 +240,16 @@ moveRootAnnToArg (Just m :< t) = Nothing :< addVarAnn m t
 -- | Append return var to func args and `replaceAnn` do not replace the roots with VarTerm.
 -- | Also do not add to args for the last term since `implResult` does this.
 applyRootAnns :: [PTermAnn] -> [PTermAnn]
-applyRootAnns ts = fmap moveRootAnnToArg (init ts) ++ [removeAnn $ last ts]
+applyRootAnns = fmap moveRootAnnToArg
 
 -- | Replace child annotation in every parse tree
--- | and make it syntactically a `PAnd`.
-replaceAnn :: [PTermAnn] -> PTerm
-replaceAnn ts = pAnd $ fmap (cata alg) ts where
+replaceAnn :: PTermAnn -> PTerm
+replaceAnn = cata alg where
   alg (Just a C.:<    _) = (varPTerm . PId) a
   alg (_      C.:< term) = Fix term
+
+replaceAnns :: [PTermAnn] -> [PTerm]
+replaceAnns = fmap replaceAnn
 
 -------------------------------------------------------------------------------
 -- Print
@@ -250,13 +268,18 @@ prettyProlog = cata alg where
   -- TODO: replace A
   alg (PTermBinOp PRule a b)    = a <+> text ":-" <+> b <> text "."
   alg (PFact (PId f) as)        = text f <> tupled as <> text "."
-  -- TODO: alg (PTermTerOp o a b= 
+  alg (PTermTerOp PIf a b c)    = a <+> text "->" <+> b <+> text ";" <+> c
   alg (PAnd as)                 = commaSep as
   alg (PFuncApp (PId f) as)     = text f <> tupled as
   alg (PPredicate (PId f) as)   = (text . deCapitalized) f <> tupled as
+  alg (PTerms as)               = sepLine as
+
+sepLine = cat . punctuate line
+
+replace a b c = if c == a then b else c
 
 prettyTVar :: PVar -> Doc
-prettyTVar (PId s) = text $ fmap toUpper s
+prettyTVar (PId s) = text $ fmap (toUpper . replace '\'' '_') s
 prettyTVar PWildcard = text "_"
 
 prettyTConst :: PConst -> Doc
