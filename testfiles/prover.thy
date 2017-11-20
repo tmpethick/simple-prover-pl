@@ -73,8 +73,8 @@
 \<open>\<And>n. dec (Suc n) \<equiv> n\<close>
 \<open>\<And>l. [] @ l \<equiv> l\<close>
 \<open>\<And>h t l. (h # t) @ l \<equiv> h # t @ l\<close>
-\<open>\<And>x y. if True then x else y \<equiv> x\<close>
-\<open>\<And>x y. if False then x else y \<equiv> y\<close>
+\<open>\<And>x y. (if True then x else y) \<equiv> x\<close>
+\<open>\<And>x y. (if False then x else y) \<equiv> y\<close>
 \<open>\<not> True \<equiv> False\<close>
 \<open>\<not> False \<equiv> True\<close>
 \<open>\<And>x y. fst (x,y) \<equiv> x\<close>

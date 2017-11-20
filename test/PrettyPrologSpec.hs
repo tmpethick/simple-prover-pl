@@ -16,6 +16,7 @@ module PrettyPrologSpec (main, spec) where
     pTermBinOp, pTermTerOp, pAnd, pFuncApp, pPredicate,
     PTerm,
     PTermF(ConstPTerm, PFuncApp, VarPTerm),
+    PBinOp(PRule),
     PConst(PTrue, PFalse),
     PVar(PId))
   import Control.Monad (forM_)
@@ -44,9 +45,15 @@ module PrettyPrologSpec (main, spec) where
   spec :: Spec
   spec = 
     describe "PrettyProlog" $ do
-      context "toPrologAST" $
+      context "toPrologAST" $ do
         it "simple prolog conversion" $ 
           testProlog toPrologAST "[True,True]" (listPTerm [constPTerm PTrue, constPTerm PTrue])
+        it "ifelse precedence over equiv" $
+          -- TODO: do not require parenthesis around ifelse to circumvent wrong precedence.
+          testProlog toPrologAST "(if True then x else y) \\<equiv> x" 
+            (pTermBinOp PRule 
+              (pFuncApp (PId "ifelse") [constPTerm PTrue, varPTerm $ PId "x", varPTerm $ PId "y"]) 
+              (varPTerm $ PId "x"))
       context "predicates" $
         it "f(a,b,c)" $
           testProlog toPrologPredicates "P a b" (pPredicate (PId "P") [varPTerm $ PId "a", varPTerm $ PId "b"])
@@ -72,7 +79,7 @@ module PrettyPrologSpec (main, spec) where
            Just "X1" :< PFuncApp (PId "prover") [Just "X0" :< PFuncApp (PId "solve") 
                                                 [Nothing :< VarPTerm (PId "a")]]]
       context "Simple Prover" $  
-        forM_ [simpleProverPair !! 8] $ \(isabelle, prolog) -> 
+        forM_ simpleProverPair $ \(isabelle, prolog) -> 
           it ("test " ++ isabelle) $ translateFull isabelle `shouldBe` prolog
 
   main :: IO ()

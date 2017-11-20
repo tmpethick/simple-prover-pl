@@ -108,19 +108,20 @@ toPrologAST = cata alg where
     (VarPTerm f)    -> pFuncApp f [b]
     (PFuncApp f b') -> pFuncApp f (b' ++ [b])
   
-  -- Concat and not is just a function call
+  -- The following are just "function calls" (predicates).
   alg (TermBinOp TConcat a b) = pFuncApp (PId "append") [a, b]
   alg (TermBinOp TEq a b)     = pFuncApp (PId "eq") [a, b]
-  alg (TermBinOp TConj a b)   = pFuncApp (PId "con") [a, b]
+  alg (TermBinOp TConj a b)   = pFuncApp (PId "conj") [a, b]
   alg (TermUniOp TNot a)      = pFuncApp (PId "not") [a]
-  
+  alg (TermTerOp TIf a b c)   = pFuncApp (PId "ifelse") [a, b, c]
+
   -- 1-to-1 translations
   alg (ConstTerm c)       = constPTerm (convertConst c)
   alg (VarTerm v)         = varPTerm (convertVar v)
   alg (TupleTerm as)      = tuplePTerm as
   alg (ListTerm as)       = listPTerm as
   alg (TermBinOp o a b)   = pTermBinOp (convertBinOp o) a b
-  alg (TermTerOp o a b c) = pTermTerOp (convertTerOp o) a b c
+  -- alg (TermTerOp o a b c) = pTermTerOp (convertTerOp o) a b c
   alg (TermQuant _ _ a)   = a
   alg (TermCart as)       = pTerms as
 
@@ -160,7 +161,7 @@ implResult = cata alg where
   alg (PTermBinOp PRule a b) = 
     let 
       (depTerms, bodyRoot) = chainNestedFuncApp b
-      head = case unfix bodyRoot of
+      head      = case unfix bodyRoot of
         (PFuncApp f args) -> addResultVar a
         _                 -> addArg bodyRoot a
       bodyTerms = case unfix bodyRoot of

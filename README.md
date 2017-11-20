@@ -2,6 +2,14 @@
 General (manual) conversion approach
 ====================================
 
+Usage
+-----
+
+```
+stack build && stack exec -- simple-prover-pl-exe "testfiles/prover-manual.thy"
+```
+
+
 1. Capitalize every argument
 2. Replace `constants` like `ZeroNat`.
 3. make `more x1 x2 = y` into<br>

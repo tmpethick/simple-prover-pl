@@ -12,3 +12,4 @@
  can not use these commands.
 [":{",":abandon",":back",":break",":continue",":delete",":force",":forward",":history",":list",":print",":sprint",":step",":steplocal",":stepmodule",":trace"]
 
+2017-11-19 16:05:18 [ThreadId 11] ERROR phoityne - "error: parse error on input \8216->\8217"
