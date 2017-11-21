@@ -6,6 +6,7 @@
 
 module PrettyProlog where
 
+import qualified Data.List as List
 import Data.Eq.Deriving (deriveEq1)
 import Text.Show.Deriving (deriveShow1)
 import Data.Functor.Identity (Identity)  
@@ -18,6 +19,8 @@ import Control.Comonad.Cofree (Cofree((:<)))
 import Control.Monad.Free
 import Data.Functor.Foldable
 import Control.Monad.Supply (Supply, supply, evalSupply)
+import qualified Data.Set as Set
+import Data.Deriving (deriveOrd1)
 
 import Foldable (cataM)
 import Parse (
@@ -35,13 +38,13 @@ import Parse (
 -- Types
 -------------------------------------------------------------------------------
 
-data PVar = PId String | PWildcard deriving (Eq, Show)
+data PVar = PId String | PWildcard deriving (Eq, Show, Ord)
 
-data PConst = PTrue | PFalse | PString String | PInteger Integer deriving (Eq, Show)
+data PConst = PTrue | PFalse | PString String | PInteger Integer deriving (Eq, Show, Ord)
 
-data PBinOp = PAddHead | PRule deriving (Eq, Show)
+data PBinOp = PAddHead | PRule deriving (Eq, Show, Ord)
 
-data PTerOp = PIf deriving (Eq, Show)
+data PTerOp = PIf deriving (Eq, Show, Ord)
 
 data PTermF a = 
     ConstPTerm PConst
@@ -55,10 +58,11 @@ data PTermF a =
   | PFact PVar [a]
   | PPredicate PVar [a]
   | PTerms [a]
-  deriving (Show, Eq, Functor, Foldable, Traversable)
+  deriving (Show, Eq, Functor, Foldable, Traversable, Ord)
 
 deriveShow1 ''PTermF
 deriveEq1 ''PTermF
+deriveOrd1 ''PTermF
 
 type PTerm = Fix PTermF
 
@@ -172,13 +176,11 @@ implResult = cata alg where
       _  -> pTermBinOp PRule head (pAnd bodyTerms)
   alg e = Fix e
 
-convertToFact = unfix >>> convert >>> Fix where
-  convert (PFuncApp f args) = PFact f args
+convertToFact = liftFix (\(PFuncApp f args) -> PFact f args)
 
 -- TODO: simplify unfix/fix with lift analog?
 addArg :: PTerm -> PTerm -> PTerm
-addArg arg = unfix >>> addVar >>> Fix where
-  addVar (PFuncApp f args) = PFuncApp f (args ++ [arg])
+addArg arg = liftFix (\(PFuncApp f args) -> PFuncApp f (args ++ [arg]))
 
 -- TODO: Find unique term instead of "Y"
 addResultVar :: PTerm -> PTerm
@@ -187,7 +189,6 @@ addResultVar = addArg $ (varPTerm . PId) "Y"
 ------------- chain ---------------
 
 -- | Create collection of all used variable names in the parse tree.
--- TODO: unused. Eventually use to pick unqiue names.
 usedVars :: PTerm -> [String]
 usedVars = cata alg where
   alg (VarPTerm (PId v)) = [v]
@@ -288,7 +289,33 @@ prettyTConst PTrue = text "1"
 prettyTConst PFalse = text "0"
 prettyTConst (PString s) = text s
 prettyTConst (PInteger i) = integer i
-    
+
+countOccurances :: [String] -> Set.Set String
+countOccurances = List.sort >>> List.group -- create groups of occurances
+             >>> map (head &&& length)     -- count occurances
+             >>> filter ((1==) . snd)      -- only select 1 occurances
+             >>> map fst                   -- discard count
+             >>> Set.fromList              -- make it easy to lookup
+
+varCount :: PTerm -> Set.Set String
+varCount term = countOccurances $ usedVars term
+
+removeSingletonVars :: PTerm -> PTerm
+removeSingletonVars term = cata (Fix . alg) term where 
+  alg e@(VarPTerm (PId v)) = if isSingleton v then VarPTerm PWildcard else e
+  alg e = e
+  isSingleton v = Set.member v singletons
+  singletons = varCount term 
+
+liftFix :: (PTermF PTerm -> PTermF PTerm) -> PTerm -> PTerm
+liftFix f = unfix >>> f >>> Fix
+
+removeSingletonVarsFromTerms :: PTerm -> PTerm
+removeSingletonVarsFromTerms = liftFix (\(PTerms ts) -> PTerms $ fmap removeSingletonVars ts) 
+
+sortTerms :: PTerm -> PTerm
+sortTerms = liftFix (\(PTerms ts) -> PTerms $ List.sort ts)
+
 -------------------------------------------------------------------------------
 -- Composed
 -------------------------------------------------------------------------------
@@ -297,6 +324,8 @@ isabelleToProlog :: Term -> PTerm
 isabelleToProlog = toPrologAST 
                >>> predicates
                >>> implResult 
+               >>> removeSingletonVarsFromTerms
+               -- >>> sortTerms
 
 prettyIsabelleInProlog :: Term -> Doc
 prettyIsabelleInProlog = isabelleToProlog >>> prettyProlog

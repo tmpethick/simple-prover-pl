@@ -47,6 +47,7 @@ extra-deps:
   - free-4.12.4
   - unification-fd-0.10.0.1
   - monad-supply-0.6
+  - containers-0.5.7.1
 # Override default flag values for local packages and extra-deps
 flags: {}
 

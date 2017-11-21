@@ -12,17 +12,17 @@ solve([],[[]]).
 
 solve([H|T],Y) :- fst(H,X0), snd(H,X1), track(T,X0,X1,Y).
 
-track(S,N,pre(B,I,V),Y) :- append(S,[(0,pre(B,I,V))],X0), not(B,X1), base(S,X2), stop([X0],pre(X1,I,V),X2,Y).
+track(S,_,pre(B,I,V),Y) :- append(S,[(0,pre(B,I,V))],X0), not(B,X1), base(S,X2), stop([X0],pre(X1,I,V),X2,Y).
 
-track(S,N,con(P,Q),[X0,X1]) :- append(S,[(0,P)],X0), append(S,[(0,Q)],X1).
+track(S,_,con(P,Q),[X0,X1]) :- append(S,[(0,P)],X0), append(S,[(0,Q)],X1).
 
-track(S,N,dis(P,Q),[X0]) :- append(S,[(0,P),(0,Q)],X0).
+track(S,_,dis(P,Q),[X0]) :- append(S,[(0,P),(0,Q)],X0).
 
-track(S,N,uni(P),[X4]) :- base(S,X0), frees([uni(P)|X0],X1), fresh(X1,X2), subst(0,X2,P,X3), append(S,[(0,X3)],X4).
+track(S,_,uni(P),[X4]) :- base(S,X0), frees([uni(P)|X0],X1), fresh(X1,X2), subst(0,X2,P,X3), append(S,[(0,X3)],X4).
 
 track(S,N,exi(P),[X1]) :- subst(0,N,P,X0), append(S,[(0,X0),(suc(N),exi(P))],X1).
 
-stop(C,P,[],C).
+stop(C,_,[],C).
 
 stop(C,P,[H|T],Y) :- eq(P,H,X0), stop(C,P,T,X1), ifelse(X0,[],X1,Y).
 
@@ -40,17 +40,17 @@ subst(X,S,uni(P),uni(X0)) :- subst(suc(X),suc(S),P,X0).
 
 subst(X,S,exi(P),exi(X0)) :- subst(suc(X),suc(S),P,X0).
 
-mend(X,S,[],[]).
+mend(_,_,[],[]).
 
 mend(X,S,[H|T],[X1|X2]) :- sub(H,X,X0), more(X,S,H,X0,X1), mend(X,S,T,X2).
 
 more(X,S,H,0,Y) :- sub(X,H,X0), over(S,H,X0,Y).
 
-more(X,S,H,suc(N),Y) :- dec(H,Y).
+more(_,_,H,suc(_),Y) :- dec(H,Y).
 
-over(S,H,0,S).
+over(S,_,0,S).
 
-over(S,H,suc(N),H).
+over(_,H,suc(_),H).
 
 fresh([],0).
 
@@ -60,7 +60,7 @@ frees([],[]).
 
 frees([H|T],Y) :- free(H,X0), frees(T,X1), append(X0,X1,Y).
 
-free(pre(B,I,V),V).
+free(pre(_,_,V),V).
 
 free(con(P,Q),Y) :- free(P,X0), free(Q,X1), append(X0,X1,Y).
 
@@ -78,45 +78,45 @@ dash(L,0,L).
 
 dash(L,suc(N),[N|L]).
 
-eq(pre(B,I,V),con(P,Q),0).
+eq(pre(_,_,_),con(_,_),0).
 
-eq(con(P,Q),pre(B,I,V),0).
+eq(con(_,_),pre(_,_,_),0).
 
-eq(pre(B,I,V),dis(P,Q),0).
+eq(pre(_,_,_),dis(_,_),0).
 
-eq(dis(P,Q),pre(B,I,V),0).
+eq(dis(_,_),pre(_,_,_),0).
 
-eq(pre(B,I,V),uni(P),0).
+eq(pre(_,_,_),uni(_),0).
 
-eq(uni(P),pre(B,I,V),0).
+eq(uni(_),pre(_,_,_),0).
 
-eq(pre(B,I,V),exi(P),0).
+eq(pre(_,_,_),exi(_),0).
 
-eq(exi(P),pre(B,I,V),0).
+eq(exi(_),pre(_,_,_),0).
 
-eq(con(P,Q),dis(P_,Q_),0).
+eq(con(_,_),dis(_,_),0).
 
-eq(dis(P_,Q_),con(P,Q),0).
+eq(dis(_,_),con(_,_),0).
 
-eq(con(P,Q),uni(P_),0).
+eq(con(_,_),uni(_),0).
 
-eq(uni(P_),con(P,Q),0).
+eq(uni(_),con(_,_),0).
 
-eq(con(P,Q),exi(P_),0).
+eq(con(_,_),exi(_),0).
 
-eq(exi(P_),con(P,Q),0).
+eq(exi(_),con(_,_),0).
 
-eq(dis(P,Q),uni(P_),0).
+eq(dis(_,_),uni(_),0).
 
-eq(uni(P_),dis(P,Q),0).
+eq(uni(_),dis(_,_),0).
 
-eq(dis(P,Q),exi(P_),0).
+eq(dis(_,_),exi(_),0).
 
-eq(exi(P_),dis(P,Q),0).
+eq(exi(_),dis(_,_),0).
 
-eq(uni(P),exi(P_),0).
+eq(uni(_),exi(_),0).
 
-eq(exi(P_),uni(P),0).
+eq(exi(_),uni(_),0).
 
 eq(pre(B,I,V),pre(B_,I_,V_),Y) :- eq(B,B_,X0), eq(I,I_,X1), conj(X0,X1,X2), eq(V,V_,X3), conj(X2,X3,Y).
 
@@ -144,17 +144,17 @@ append([],L,L).
 
 append([H|T],L,[H|X0]) :- append(T,L,X0).
 
-ifelse(1,X,Y,X).
+ifelse(1,X,_,X).
 
-ifelse(0,X,Y,Y).
+ifelse(0,_,Y,Y).
 
 not(1,0).
 
 not(0,1).
 
-fst((X,Y),X).
+fst((X,_),X).
 
-snd((X,Y),Y).
+snd((_,Y),Y).
 
 eq(0,0,1).
 
@@ -166,15 +166,15 @@ eq(0,0,1).
 
 conj(1,B,B).
 
-conj(0,B,0).
+conj(0,_,0).
 
-eq(0,suc(N),0).
+eq(0,suc(_),0).
 
-eq(suc(N),0,0).
+eq(suc(_),0,0).
 
-eq([],[H|T],0).
+eq([],[_|_],0).
 
-eq([H|T],[],0).
+eq([_|_],[],0).
 
 eq(1,0,0).
 

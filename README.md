@@ -1,13 +1,36 @@
 
-General (manual) conversion approach
-====================================
+Simple Prover Compiler
+======================
 
-Usage
+This project compiles a theorem prover written and proven with Isabelle and compiles it into Prolog.
+It does so in Haskell through several catamorphism that changes the Isabelle AST into a Prolog AST.
+It includes a Isabelle pretty printer only for testing the parser by exploiting that `prettyPrint . parse = id`.
+
+It has three (brilliant) libraries as main dependencies:
+
+- Parsec for parsing Isabelle.
+- Recursive Schemes for generalized recursion methods like catamorphism and paramorphism.
+- PrettyPrint by Daan Leijen based on Philip Wadler's prettier printer.
+
+
+Tests
 -----
 
+To run Haskell tests:
+
 ```
-stack build && stack exec -- simple-prover-pl-exe "testfiles/prover-manual.thy"
+stack test --file-watch
 ```
+
+To generate and test the compiled prolog prover run:
+
+```
+make testprolog
+```
+
+
+General (manual) conversion approach
+====================================
 
 
 1. Capitalize every argument
