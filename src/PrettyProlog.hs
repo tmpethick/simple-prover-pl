@@ -295,7 +295,7 @@ countOccurances = List.sort >>> List.group -- create groups of occurances
              >>> map (head &&& length)     -- count occurances
              >>> filter ((1==) . snd)      -- only select 1 occurances
              >>> map fst                   -- discard count
-             >>> Set.fromList              -- make it easy to lookup
+             >>> Set.fromList              -- make lookup effecient
 
 varCount :: PTerm -> Set.Set String
 varCount term = countOccurances $ usedVars term

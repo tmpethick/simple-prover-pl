@@ -141,13 +141,13 @@ expr = buildExpressionParser table term <?> "expression"
 -- TODO: using `try` might not be desirable.. (research why)
 term = try (m_parens expr)
   <|> pQuant
-  <|> pIf expr
+  <|> pIf   expr
   <|> tuple expr 
-  <|> list expr
-  <|> (m_reserved "True"  >> return (constTerm TTrue))
-  <|> (m_reserved "False" >> return (constTerm TFalse))
+  <|> list  expr
+  <|> (m_reserved "True"      >> return (constTerm TTrue))
+  <|> (m_reserved "False"     >> return (constTerm TFalse))
   <|> (constTerm . TInteger) <$> m_natural
-  <|> ((varTerm . TId) <$> m_identifier)
+  <|> ((varTerm . TId)       <$> m_identifier)
 
 table = [[Prefix pNot],
          [Infix  pFuncApp Expr.AssocLeft],
