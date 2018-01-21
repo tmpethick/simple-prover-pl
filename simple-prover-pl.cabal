@@ -19,6 +19,7 @@ library
                      , Pretty
                      , PrettyProlog
                      , Foldable
+                     , TreeDrawing
   build-depends:       base >= 4.7 && < 5
                      , recursion-schemes >= 5.0
                      , deriving-compat >= 0.3
