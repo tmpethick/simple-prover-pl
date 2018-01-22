@@ -1,6 +1,13 @@
 :- begin_tests(cases).
 :- ensure_loaded("prover-generated.pl").
 
+% Helpers
+:- op(650, xfy, con).
+:- op(640, xfy, dis).
+:- op(630, xfy, if).
+:- op(630, xfy, imp).
+:- op(620, xfy, iff).
+
 test(add)   :- add(suc(suc(0)), suc(suc(suc(0))), suc(suc(suc(suc(suc(0)))))).
 test(base)  :- base([(1,2)], [2]).
 test(dash0) :- dash([suc(0)], 0, [suc(0)]).
@@ -37,7 +44,13 @@ test(check) :-
         exi(pre(1, 0, [0]))
       )
     ),
-  check(T, 1).
+  check(T, 1),
+  check(pre(0, 0, []) imp pre(0, 0, []), 1),
+  check((pre(0, 0, []) iff pre(0, 0, [])) dis pre(0, 1, []), 1), 
+  check(dis(
+    pre(0, 0, [0]),
+    pre(1, 0, [0])
+  ), 1).
 :- end_tests(cases).
 
 % :-trace(track).

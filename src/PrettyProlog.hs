@@ -310,8 +310,11 @@ removeSingletonVars term = cata (Fix . alg) term where
 liftFix :: (PTermF PTerm -> PTermF PTerm) -> PTerm -> PTerm
 liftFix f = unfix >>> f >>> Fix
 
+-- Remove singletons for each Term individually if list of terms.
 removeSingletonVarsFromTerms :: PTerm -> PTerm
-removeSingletonVarsFromTerms = liftFix (\(PTerms ts) -> PTerms $ fmap removeSingletonVars ts) 
+removeSingletonVarsFromTerms t = case unfix t of 
+  (PTerms ts) -> pTerms $ fmap removeSingletonVars ts
+  _           -> removeSingletonVars t
 
 sortTerms :: PTerm -> PTerm
 sortTerms = liftFix (\(PTerms ts) -> PTerms $ List.sort ts)

@@ -18,7 +18,7 @@ module PrettyPrologSpec (main, spec) where
     PTermF(ConstPTerm, PFuncApp, VarPTerm),
     PBinOp(PRule),
     PConst(PTrue, PFalse),
-    PVar(PId))
+    PVar(PId, PWildcard))
   import Control.Monad (forM_)
     
   import TestCases (simpleProverPair)
@@ -75,9 +75,9 @@ module PrettyPrologSpec (main, spec) where
         it "should split nested func app" $
           let annotate = splitOnAnn . evalUniqNameSupplier . addAnn
           in annotate (toProlog parser "prover(solve(a))") `shouldBe` 
-          [Just "X0" :< PFuncApp (PId "solve")  [Nothing :< VarPTerm (PId "a")],
+          [Just "X0" :< PFuncApp (PId "solve")  [Nothing :< VarPTerm PWildcard],
            Just "X1" :< PFuncApp (PId "prover") [Just "X0" :< PFuncApp (PId "solve") 
-                                                [Nothing :< VarPTerm (PId "a")]]]
+                                                [Nothing :< VarPTerm PWildcard]]]
       context "Simple Prover" $  
         forM_ simpleProverPair $ \(isabelle, prolog) -> 
           it ("test " ++ isabelle) $ translateFull isabelle `shouldBe` prolog
