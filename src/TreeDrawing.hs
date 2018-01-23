@@ -48,7 +48,7 @@ fitList es = map (uncurry mean) (zip (fitListL es) (fitListR es))
 
 design :: Tree a -> Tree (a, Float)
 design tree = fst (design' tree)
-  where 
+  where
     design' :: Tree a -> (Tree (a, Float), Extent)
     design' (Node label subtrees) =
       let (trees, extents) = unzip (map design' subtrees)

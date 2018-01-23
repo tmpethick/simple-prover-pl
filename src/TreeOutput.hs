@@ -1,4 +1,4 @@
-module TreeOutput where 
+module TreeOutput where
 -- Outputting tree to PostScript
 
 import Parse
@@ -7,16 +7,21 @@ import Data.List.Split
 import Data.Maybe
 import System.IO
 import qualified Data.Map as Map
+import ConvertTerm
+
+treeToString :: Tree String -> String
+treeToString tree = show tree
 
 -- Simple example of a tree
 testTree = Node "a" $ [Node "b" [], Node "c" [Node "e" [], Node "f" []], Node "d" [Node "g" [], Node "h" []]]
 
-drawing :: Term -> IO ()
-drawing term = drawTree testTree
+drawTermAsTree :: Term -> IO ()
+drawTermAsTree term = drawTree designTree
+  where designTree = convertTerm term
 
-draw :: String -> IO ()
-draw filename = parseIsabelleFile filename
-  >>= drawing
+drawTerm :: String -> IO ()
+drawTerm filename = parseIsabelleFile filename
+  >>= drawTermAsTree
 
 splitString :: String -> [String]
 splitString = splitOn " "
@@ -25,7 +30,7 @@ splitString = splitOn " "
 type Depth = Int
 type MaxMap = Map.Map Depth Int
 
-depthTree :: Tree (String, b) -> Tree Int 
+depthTree :: Tree (String, b) -> Tree Int
 depthTree tree = head $ depthTree' [tree]
   where
     mapper (Node (l, _) ns) = Node ((length . splitString) l) (depthTree' ns)
@@ -47,9 +52,9 @@ depthawareFold f (acc, d) (Node label ts) =
 
 layerWiseMax :: Tree Int -> (MaxMap, Depth)
 layerWiseMax = depthawareFold folder (Map.empty, 0)
-  where 
+  where
     folder :: (MaxMap, Depth) -> Tree Int -> (MaxMap, Depth)
-    folder (maxMap, d) (Node label _) = 
+    folder (maxMap, d) (Node label _) =
       let addToMap maxMap (Just a) = if label > d then Map.insert d label maxMap else maxMap
           addToMap maxMap Nothing  = Map.insert d label maxMap
        in (addToMap maxMap $ Map.lookup d maxMap, d + 1)
@@ -81,7 +86,7 @@ drawNode depthMap depth (Node (l, _) nodes) =
         ++ drawing nodes
         ++ (if spacing > 0 && not (null nodes) then replicate spacing (rmoveto 0.0 (-20.0)) else [])
         ++ [rmoveto 0.0 (-8.0 + (-20.0) * ((fromIntegral . length) label))]
-  where 
+  where
     drawing :: [Tree (String, Float)] -> [String]
     drawing [] = []
     drawing _  = let positions = map getPos nodes
@@ -98,9 +103,9 @@ drawTree tree =
       depthMap   = layerWiseMax $ depthTree designTree
       left       = computeBound min [designTree]
       right      = computeBound max [designTree]
-      width      = 100 * (right - left)
-      height     = 100 * (depth designTree)
-   in do 
+      width      = 65 * (right - left)
+      height     = 65 * (depth designTree)
+   in do
     out <- openFile filename WriteMode
     hPutStrLn out $ "%!PS"
     hPutStrLn out $ "% Compile to PDF with:"
@@ -121,7 +126,7 @@ computeBound f (Node (_, v) children : rest) = f (v + computeBound f children) (
 
 depth :: Tree a -> Depth
 depth tree = depth' 0 [tree]
-  where 
+  where
     depth' :: Depth -> [Tree a] -> Depth
     depth' d  []              = d
     depth' d (Node _ ns : rs) = max (depth' (d + 1) ns) (depth' d rs)
