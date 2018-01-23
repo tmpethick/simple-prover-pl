@@ -1,10 +1,5 @@
 module TreeDrawing where
 
-import Parse
-
--- let curry f a b = f (a, b)
--- let uncurry f (a, b) = f a b
-
 data Tree a = Node a [Tree a] deriving (Show)
 
 type Extent = [(Float, Float)]
@@ -63,12 +58,3 @@ design tree = fst (design' tree)
           resultextent = (0.0, 0.0) : mergeList pextents
           resulttree = Node (label, 0.0) ptrees
       in (resulttree, resultextent)
-
-drawing :: Term -> IO ()
-drawing term = print $ design testTree
-
-drawTree :: String -> IO ()
-drawTree filename = parseIsabelleFile filename
-  >>= drawing
-
-testTree = Node "a" $ [Node "b" [], Node "c" [Node "e" [], Node "f" []], Node "d" [Node "g" [], Node "h" []]]
