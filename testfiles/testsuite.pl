@@ -112,4 +112,8 @@ test(t31) :- nnf_then_check(pre(1, 0, [])).
 % :-trace.
 % :-debug.
 :- run_tests.
-:- halt.
+
+% Halt if `persist` is not supply as first argument.
+should_halt([persist|_]).
+should_halt(_) :- halt.
+:- current_prolog_flag(argv, Argv), should_halt(Argv).

@@ -5,3 +5,5 @@ genprolog:
 testprolog: genprolog
 	swipl -s testfiles/testsuite.pl
 
+testprolog-persist: genprolog
+	swipl -s testfiles/testsuite.pl -- persist
