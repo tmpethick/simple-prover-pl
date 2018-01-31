@@ -6,15 +6,17 @@ module Main where
   import Parse (parseIsabelleFile)
   import PrettyProlog (isabelleToProlog, prettyProlog)
   import Pretty (docToString)
+  import TreeOutput (drawTerm)
 
   translate :: String -> IO ()
   translate fileName = parseIsabelleFile fileName
     >>= (isabelleToProlog
-    >>> prettyProlog 
+    >>> prettyProlog
     >>> docToString
     >>> putStr)
 
   main :: IO ()
   main = do
     fileNames <- getArgs
-    mapM_ translate fileNames
+    drawTerm (head fileNames)
+    -- mapM_ translate fileNames
